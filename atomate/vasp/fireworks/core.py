@@ -90,7 +90,8 @@ class StaticFW(Firework):
 
 
 class HSEBSFW(Firework):
-    def __init__(self, structure, parents, mode="gap", name=None, vasp_cmd="vasp", db_file=None, **kwargs):
+    def __init__(self, structure, parents, mode="gap", name=None, vasp_cmd="vasp", 
+                 db_file=None, kpoints_line_density=10, **kwargs):
         """
         For getting a more accurate band gap or a full band structure with HSE - requires previous
         calculation that gives VBM/CBM info or the high-symmetry kpoints.
@@ -111,7 +112,8 @@ class HSEBSFW(Firework):
 
         t=[]
         t.append(CopyVaspOutputs(calc_loc=True, additional_files=["CHGCAR"]))
-        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode))
+        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode, 
+                                        kpoints_line_density=kpoints_line_density))
         t.append(RunVaspCustodian(vasp_cmd=vasp_cmd))
         t.append(PassCalcLocs(name=name))
         t.append(VaspToDbTask(db_file=db_file, additional_fields={"task_label": name}))
