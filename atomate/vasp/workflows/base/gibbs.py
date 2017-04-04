@@ -24,7 +24,8 @@ logger = get_logger(__name__)
 
 def get_wf_gibbs_free_energy(structure, deformations, vasp_input_set=None, vasp_cmd="vasp",
                              db_file=None, user_kpoints_settings=None, t_step=10, t_min=0, t_max=1000,
-                             mesh=(20, 20, 20), eos="vinet", qha_type="debye_model", pressure=0.0):
+                             mesh=(20, 20, 20), eos="vinet", qha_type="debye_model", pressure=0.0,
+                             poisson=0.25, metadata=None):
     """
     Returns quasi-harmonic gibbs free energy workflow.
     Note: phonopy package is required for the final analysis step if qha_type="phonopy"
@@ -46,6 +47,8 @@ def get_wf_gibbs_free_energy(structure, deformations, vasp_input_set=None, vasp_
         qha_type(str): quasi-harmonic approximation type: "debye_model" or "phonopy",
             default is "debye_model"
         pressure (float): in GPa
+        poisson (float): poisson ratio
+        metadata (dict): meta data
 
     Returns:
         Workflow
@@ -67,11 +70,11 @@ def get_wf_gibbs_free_energy(structure, deformations, vasp_input_set=None, vasp_
     wf_gibbs = get_wf_deformations(structure, deformations, name="gibbs deformation",
                                    vasp_input_set=vasp_input_set, lepsilon=lepsilon, vasp_cmd=vasp_cmd,
                                    db_file=db_file, user_kpoints_settings=user_kpoints_settings,
-                                   tag=tag)
+                                   tag=tag, metadata=metadata)
 
     fw_analysis = Firework(GibbsFreeEnergyTask(tag=tag, db_file=db_file, t_step=t_step, t_min=t_min,
                                                t_max=t_max, mesh=mesh, eos=eos, qha_type=qha_type,
-                                               pressure=pressure),
+                                               pressure=pressure, poisson=poisson, metadata=metadata),
                            name="Gibbs Free Energy")
 
     append_fw_wf(wf_gibbs, fw_analysis)
