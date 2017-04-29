@@ -34,6 +34,16 @@ __email__ = 'ajain@lbl.gov, kmathew@lbl.gov, shyamd@lbl.gov'
 
 logger = get_logger(__name__)
 
+@explicit_serialize
+class OERAnalysisTask(FiretaskBase):
+    """
+    Analyzes runs for OER activity
+    """
+    required_params = ['slab']
+    optional_params = ['references', 'db_file']
+
+    def run_task(self, fw_spec):
+        pass
 
 @explicit_serialize
 class VaspToDbTask(FiretaskBase):
