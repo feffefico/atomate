@@ -133,7 +133,8 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
             vis_slab = MVLSlabSet(vac_structs[n], user_incar_settings=slab_incar_params)
             fws.append(StaticFW(structure=vac_structs[n], vasp_input_set=vis_slab, vasp_cmd=vasp_cmd,
                                 db_file=db_file, name="{} vac {}".format(name, n)))
-        fws.append(Firework(OERAnalysisTask(slab=slab, db_file=">>db_file<<"), name="OER Analysis"))
+        fws.append(Firework(OERAnalysisTask(slab=slab, db_file=">>db_file<<"), name="OER Analysis", 
+                            parents=fws))
         termination = get_termination(slab)
         name += '_{}_terminated'.format(termination)
         wfname = "{}:{}".format(name, " OER calculations")
