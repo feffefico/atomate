@@ -27,9 +27,11 @@ __email__ = 'montoyjh@lbl.gov'
 logger = get_logger(__name__)
 
 # Default parameters for slabs (sip) and adsorbates (aip)
-default_sip = {"ISIF": 0, "EDIFFG": -0.05}
-default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "BMIX": 0.0001,
-               "BMIX_MAG": 0.0001, "POTIM": 0.3, "EDIFFG": -0.05, "IBRION": 2}
+# Note: turned off symmetry
+#default_sip = {"ISIF": 0, "EDIFFG": -0.05, "ISYM":0}
+default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "BMIX": 0.0001, "ISYM":0,
+               "BMIX_MAG": 0.0001, "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 1, "EDIFF":1e-4}
+default_sip = default_aip
 default_slab_gen_params = {"max_index": 1, "min_slab_size": 12.0, "min_vacuum_size": 20.0,
                            "center_slab": True}
 
@@ -244,6 +246,7 @@ if __name__=="__main__":
     from pymatgen import MPRester
     from personal.functions import pdb_function
     from pymatgen.core.surface import SlabGenerator
+    from atomate.vasp.powerups import add_modify_incar
     mpr = MPRester()
     structure = mpr.get_structures("mp-5229")[0]
     wfs = pdb_function(get_wfs_oxide_from_bulk, structure)
@@ -257,6 +260,7 @@ if __name__=="__main__":
     for n, fw in enumerate(wfs[0].fws[1:]):
         fw.tasks[0]['structure'].to(filename="ads_{}.cif".format(n))
     from fireworks import LaunchPad
+    wfs = [add_modify_incar(wf) for wf in wfs]
     lpad = LaunchPad.auto_load()
     lpad.add_wf(wfs[0])
 
