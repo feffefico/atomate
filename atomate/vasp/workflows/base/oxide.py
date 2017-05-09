@@ -29,8 +29,9 @@ logger = get_logger(__name__)
 # Default parameters for slabs (sip) and adsorbates (aip)
 # Note: turned off symmetry
 #default_sip = {"ISIF": 0, "EDIFFG": -0.05, "ISYM":0}
-default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "BMIX": 0.0001, "ISYM":0,
-               "BMIX_MAG": 0.0001, "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 1, "EDIFF":1e-4}
+default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "ENCUT":500,
+               "BMIX": 0.0001, "ISYM":0, "BMIX_MAG": 0.0001, 
+               "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 2, "EDIFF":1e-6}
 default_sip = default_aip
 default_slab_gen_params = {"max_index": 1, "min_slab_size": 12.0, "min_vacuum_size": 20.0,
                            "center_slab": True}
@@ -38,7 +39,7 @@ default_slab_gen_params = {"max_index": 1, "min_slab_size": 12.0, "min_vacuum_si
 
 def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None, 
                             vasp_cmd=">>vasp_cmd<<", db_file=">>db_file<<", 
-                            auto_dipole=True, slab_incar_params=None, ads_incar_params=None, 
+                            auto_dipole=False, slab_incar_params=None, ads_incar_params=None, 
                             optimize_slab=False, name="", ads_structures_params={},
                             output=False, symmetrize_structs=True):
     """
@@ -135,8 +136,10 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
             vis_slab = MVLSlabSet(vac_structs[n], user_incar_settings=slab_incar_params)
             fws.append(StaticFW(structure=vac_structs[n], vasp_input_set=vis_slab, vasp_cmd=vasp_cmd,
                                 db_file=db_file, name="{} vac {}".format(name, n)))
+        """
         fws.append(Firework(OERAnalysisTask(slab=slab, db_file=">>db_file<<"), name="OER Analysis", 
                             parents=fws))
+        """
         termination = get_termination(slab)
         name += '_{}_terminated'.format(termination)
         wfname = "{}:{}".format(name, " OER calculations")
@@ -163,7 +166,7 @@ def get_termination(slab, start=0.2):
         surf = [site.species_string for site in asf.surface_sites]
     return Structure.from_sites(asf.surface_sites).composition.reduced_formula
 
-def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd=0.8):
+def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0):
     """
     This method checks whether or not the two surfaces of the slab are
     equivalent. If the point group of the slab has an inversion symmetry (
@@ -228,6 +231,13 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd=0.8):
     if recenter:
         slab.translate_sites(list(range(len(slab))), [0, 0, 0.5 - np.average(slab.frac_coords[:, 2])])
 
+    if sd_height:
+        mvec = AdsorbateSiteFinder(slab).mvec
+        projs = [np.dot(coord, mvec) for coord in slab.cart_coords]
+        mx, mn = max(projs), min(projs)
+        sd = [[False]*3 if mn+sd_height <= proj <= mx-sd_height 
+              else [True]*3 for proj in projs]
+        slab.add_site_property("selective_dynamics", sd)
     assert slab.is_symmetric, "resultant slab not symmetric"
     return slab
 
@@ -255,13 +265,16 @@ if __name__=="__main__":
     new_slab = slabs[0].copy()
     new_slab.apply_operation(so, fractional=True)
     symm_slab = pdb_function(symmetrize_slab_by_addition, slabs[0])
+    """
     slabs[0].to(filename="111.cif")
     new_slab.to(filename="111_inv.cif")
+    symm_slab.to(filename="POSCAR")
     for n, fw in enumerate(wfs[0].fws[1:]):
         fw.tasks[0]['structure'].to(filename="ads_{}.cif".format(n))
+    """
     from fireworks import LaunchPad
-    wfs = [add_modify_incar(wf) for wf in wfs]
+    wfs_mod = [add_modify_incar(wf) for wf in wfs]
     lpad = LaunchPad.auto_load()
-    lpad.add_wf(wfs[0])
+    lpad.add_wf(wfs_mod[0])
 
 
