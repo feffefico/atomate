@@ -116,13 +116,13 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
         # Add slab metadata
         name = slab.composition.reduced_formula
         name += "_"+"".join([str(i) for i in slab.miller_index])
-        vis_slab = MVLSlabSet(slab, user_incar_settings=slab_incar_params)
         if symmetrize_structs:
             slab = symmetrize_slab_by_addition(slab)
             h_structs = [symmetrize_slab_by_addition(h_struct) for h_struct in h_structs]
             oh_structs = [symmetrize_slab_by_addition(oh_struct) for oh_struct in oh_structs]
             vac_structs = [symmetrize_slab_by_addition(vac_struct) for vac_struct in vac_structs]
 
+        vis_slab = MVLSlabSet(slab, user_incar_settings=slab_incar_params)
         fws = [StaticFW(structure=slab, vasp_input_set=vis_slab, vasp_cmd=vasp_cmd,
                         db_file=db_file, name="{} slab".format(name))]
         for n in range(len(oh_structs)):
@@ -259,7 +259,7 @@ if __name__=="__main__":
     from atomate.vasp.powerups import add_modify_incar
     mpr = MPRester()
     structure = mpr.get_structures("mp-5229")[0]
-    wfs = pdb_function(get_wfs_oxide_from_bulk, structure)
+    wfs = pdb_function(get_wfs_oxide_from_bulk, structure, ads_structures_params={"repeat":[1, 1, 1]})
     slabs = generate_all_slabs(structure, **default_slab_gen_params)
     so = SymmOp.inversion()
     new_slab = slabs[0].copy()
@@ -268,12 +268,15 @@ if __name__=="__main__":
     """
     slabs[0].to(filename="111.cif")
     new_slab.to(filename="111_inv.cif")
-    symm_slab.to(filename="POSCAR")
+    """
+    #symm_slab.to(filename="POSCAR")
+    """
     for n, fw in enumerate(wfs[0].fws[1:]):
         fw.tasks[0]['structure'].to(filename="ads_{}.cif".format(n))
     """
     from fireworks import LaunchPad
     wfs_mod = [add_modify_incar(wf) for wf in wfs]
+    wfs_mod = [add_modify_incar(wf, {"incar_update":{"IBRION":2, "NSW":"25"}})]
     lpad = LaunchPad.auto_load()
     lpad.add_wf(wfs_mod[0])
 
