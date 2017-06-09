@@ -9,7 +9,7 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 if __name__ == "__main__":
     setup(
         name='atomate',
-        version='0.4.4',
+        version='0.4.5',
         description='atomate has implementations of FireWorks workflows for '
                     'Materials Science',
         long_description=open(os.path.join(module_dir, 'README.rst')).read(),
@@ -29,7 +29,7 @@ if __name__ == "__main__":
                         'phonons': ['phonopy>=1.10.8']},
         classifiers=['Programming Language :: Python :: 2.7',
                      "Programming Language :: Python :: 3",
-                     "Programming Language :: Python :: 3.5",
+                     "Programming Language :: Python :: 3.6",
                      'Development Status :: 4 - Beta',
                      'Intended Audience :: Science/Research',
                      'Intended Audience :: System Administrators',

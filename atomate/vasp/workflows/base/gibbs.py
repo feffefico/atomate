@@ -6,14 +6,14 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 This module defines the gibbs free energy workflow.
 """
 
-from datetime import datetime
+from uuid import uuid4
 
 from fireworks import Firework, Workflow
 
 from pymatgen.analysis.elasticity.strain import Deformation
 
-from atomate.utils.utils import get_logger, append_fw_wf
-from atomate.vasp.firetasks.parse_outputs import GibbsFreeEnergyTask
+from atomate.utils.utils import get_logger
+from atomate.vasp.firetasks.parse_outputs import GibbsAnalysisToDb
 from atomate.vasp.workflows.base.deformations import get_wf_deformations
 
 __author__ = 'Kiran Mathew'
@@ -59,12 +59,11 @@ def get_wf_gibbs_free_energy(structure, deformations, vasp_input_set=None, vasp_
         try:
             from phonopy import Phonopy
         except ImportError:
-            logger.warn("'phonopy' package NOT installed. Required for the final analysis step."
-                        "The debye model for the quasi harmonic approximation will be used.")
-            qha_type = "debye_model"
-            lepsilon = False
+            raise RuntimeError("'phonopy' package is NOT installed but is required for the final "
+                               "analysis step; you can alternatively switch to the qha_type to "
+                               "'debye_model' which does not require 'phonopy'.")
 
-    tag = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S-%f')
+    tag = "gibbs group: >>{}<<".format(str(uuid4()))
 
     deformations = [Deformation(defo_mat) for defo_mat in deformations]
     wf_gibbs = get_wf_deformations(structure, deformations, name="gibbs deformation",
@@ -72,12 +71,14 @@ def get_wf_gibbs_free_energy(structure, deformations, vasp_input_set=None, vasp_
                                    db_file=db_file, user_kpoints_settings=user_kpoints_settings,
                                    tag=tag, metadata=metadata)
 
-    fw_analysis = Firework(GibbsFreeEnergyTask(tag=tag, db_file=db_file, t_step=t_step, t_min=t_min,
-                                               t_max=t_max, mesh=mesh, eos=eos, qha_type=qha_type,
-                                               pressure=pressure, poisson=poisson, metadata=metadata),
+    # TODO: @kmathew - better to stick to lowercase FW names ('gibbs free energy'). That is the
+    # convention for most FWs and switching back and forth is confusing to remember. -computron
+    fw_analysis = Firework(GibbsAnalysisToDb(tag=tag, db_file=db_file, t_step=t_step, t_min=t_min,
+                                             t_max=t_max, mesh=mesh, eos=eos, qha_type=qha_type,
+                                             pressure=pressure, poisson=poisson, metadata=metadata),
                            name="Gibbs Free Energy")
 
-    append_fw_wf(wf_gibbs, fw_analysis)
+    wf_gibbs.append_wf(Workflow.from_Firework(fw_analysis), wf_gibbs.leaf_fw_ids)
 
     wf_gibbs.name = "{}:{}".format(structure.composition.reduced_formula, "gibbs free energy")
 
