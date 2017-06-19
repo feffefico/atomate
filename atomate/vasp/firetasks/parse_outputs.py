@@ -298,6 +298,21 @@ class ElasticTensorToDb(FiretaskBase):
 
 
 @explicit_serialize
+class SlabToDb(FiretaskBase):
+    """
+    Analyzes the slab data of an adsorption workflow to produce
+    the surface energy and adsorption energies
+    """
+
+    required_params = ['slab']
+    optional_params = ['db_file']
+
+    def run_task(self, fw_spec):
+        import pdb; pdb.set_trace()
+        pass
+
+
+@explicit_serialize
 class RamanTensorToDb(FiretaskBase):
     """
     Raman susceptibility tensor for each mode = Finite difference derivative of the dielectric
