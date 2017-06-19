@@ -22,7 +22,7 @@ module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 db_dir = os.path.join(module_dir, "..", "..", "..", "common", "test_files")
 ref_dir = os.path.join(module_dir, "..", "..", "test_files")
 
-DEBUG_MODE = False  # If true, retains the database and output dirs at the end of the test
+DEBUG_MODE = True  # If true, retains the database and output dirs at the end of the test
 VASP_CMD = None  # If None, runs a "fake" VASP. Otherwise, runs VASP with this command...
 
 
@@ -36,8 +36,9 @@ class TestAdsorptionWorkflow(AtomateTest):
         slabs = generate_all_slabs(self.struct_ir, **sgp)
         slabs = [slab for slab in slabs if slab.miller_index==(1, 0, 0)]
         sgp.pop("max_index")
+        H2 = Molecule('HH', [[0, 0, 0], [0, 0, 0.7]])
         self.wf_1 = get_wf_surface(slabs, [Molecule("H", [[0, 0, 0]])], self.struct_ir, sgp,
-                                  db_file=os.path.join(db_dir, "db.json"))
+                                  db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2])
 
     def _simulate_vasprun(self, wf):
         reference_dir = os.path.abspath(os.path.join(ref_dir, "adsorbate_wf"))
@@ -45,7 +46,8 @@ class TestAdsorptionWorkflow(AtomateTest):
                        "Ir-Ir_(1, 0, 0) slab optimization": os.path.join(reference_dir, "2"),
                        "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 0": os.path.join(reference_dir, "3"),
                        "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 1": os.path.join(reference_dir, "4"),
-                       "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 2": os.path.join(reference_dir, "5")}
+                       "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 2": os.path.join(reference_dir, "5"),
+                       "H2-structure optimization": os.path.join(reference_dir, "H2_molecule")}
         return use_fake_vasp(wf, ir_ref_dirs, params_to_check=["ENCUT", "ISIF", "IBRION"])
 
     def _check_run(self, d, mode):
@@ -61,7 +63,7 @@ class TestAdsorptionWorkflow(AtomateTest):
     def test_wf(self):
         wf = self._simulate_vasprun(self.wf_1)
 
-        self.assertEqual(len(self.wf_1.fws), 5)
+        self.assertEqual(len(self.wf_1.fws), 7)
         # check vasp parameters for ionic relaxation
         ads_vis = [fw.tasks[1]['vasp_input_set']
                    for fw in self.wf_1.fws if "adsorbate" in fw.name]
@@ -70,6 +72,7 @@ class TestAdsorptionWorkflow(AtomateTest):
         self.lp.add_wf(wf)
         rapidfire(self.lp, fworker=FWorker(env={"db_file": os.path.join(db_dir, "db.json")}))
 
+        import pdb; pdb.set_trace()
         # check relaxation
         d = self.get_task_collection().find_one({"task_label": "H1-Ir_(1, 0, 0) adsorbate optimization 1"})
         self._check_run(d, mode="H1-Ir_(1, 0, 0) adsorbate optimization 1")
