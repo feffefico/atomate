@@ -51,14 +51,16 @@ class TestAdsorptionWorkflow(AtomateTest):
         return use_fake_vasp(wf, ir_ref_dirs, params_to_check=["ENCUT", "ISIF", "IBRION"])
 
     def _check_run(self, d, mode):
-        if mode not in ["H1-Ir_(1, 0, 0) adsorbate optimization 1"]:
+        if mode not in ["H1-Ir_(1, 0, 0) adsorbate optimization 1", "surface analysis"]:
             raise ValueError("Invalid mode!")
 
         if "adsorbate" in mode:
             self.assertEqual(d["formula_reduced_abc"], "H1 Ir16")
-        # Check relaxation of adsorbate
-        # Check slab calculations
-        # Check structure optimization
+        
+        if "analysis" in mode:
+            self.assertEqual(tuple(d['miller_index']), (1, 0, 0))
+            self.assertAlmostEqual(d['surface_energy'], 0.16687282)
+            self.assertAlmostEqual(d['adsorbates']['H1']['minimum']['adsorption_energy'], -0.49227153)
 
     def test_wf(self):
         wf = self._simulate_vasprun(self.wf_1)
@@ -74,7 +76,15 @@ class TestAdsorptionWorkflow(AtomateTest):
         # check relaxation
         d = self.get_task_collection().find_one({"task_label": "H1-Ir_(1, 0, 0) adsorbate optimization 1"})
         self._check_run(d, mode="H1-Ir_(1, 0, 0) adsorbate optimization 1")
+        
+        d = self.get_task_collection(coll_name="surfaces").find_one()
+        self._check_run(d, mode="surface analysis")
 
+
+        # check analysis
+
+
+        # check workflow completion
         wf = self.lp.get_wf_by_fw_id(1)
         self.assertTrue(all([s == 'COMPLETED' for s in wf.fw_states.values()]))
 
