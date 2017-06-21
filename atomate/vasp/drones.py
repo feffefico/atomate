@@ -271,7 +271,6 @@ class VaspDrone(AbstractDrone):
             vrun = Vasprun(vasprun_file, parse_eigen=True, parse_projected_eigen=True)
         else:
             vrun = Vasprun(vasprun_file)
-
         d = vrun.as_dict()
 
         # rename formula keys
@@ -347,15 +346,20 @@ class VaspDrone(AbstractDrone):
         max_force = None
         calc = d["calcs_reversed"][0]
         if d["state"] == "successful" and calc["input"]["parameters"].get("NSW", 0) > 0:
-            # handle the max force and max force error
-            max_force = max([np.linalg.norm(a) for a in calc["output"]["ionic_steps"][-1]["forces"]])
-            if max_force > max_force_threshold:
-                error_msgs.append("Final max force exceeds {} eV".format(max_force_threshold))
-                d["state"] = "error"
-
             s = Structure.from_dict(d["output"]["structure"])
             if not s.is_valid():
                 error_msgs.append("Bad structure (atoms are too close!)")
+                d["state"] = "error"
+
+            # handle the max force and max force error
+            forces = np.array(calc["output"]["ionic_steps"][-1]["forces"])
+            # account for selective dynamics
+            selective_dynamics = s.site_properties.get("selective_dynamics", None)
+            if selective_dynamics:
+                forces[np.logical_not(selective_dynamics)] = 0
+            max_force = max(np.linalg.norm(forces, axis=1))
+            if max_force > max_force_threshold:
+                error_msgs.append("Final max force exceeds {} eV".format(max_force_threshold))
                 d["state"] = "error"
 
         d["analysis"] = {"delta_volume": delta_vol,
