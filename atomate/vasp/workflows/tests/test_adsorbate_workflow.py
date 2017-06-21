@@ -22,7 +22,7 @@ module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 db_dir = os.path.join(module_dir, "..", "..", "..", "common", "test_files")
 ref_dir = os.path.join(module_dir, "..", "..", "test_files")
 
-DEBUG_MODE = True  # If true, retains the database and output dirs at the end of the test
+DEBUG_MODE = False  # If true, retains the database and output dirs at the end of the test
 VASP_CMD = None  # If None, runs a "fake" VASP. Otherwise, runs VASP with this command...
 
 
@@ -70,9 +70,7 @@ class TestAdsorptionWorkflow(AtomateTest):
         assert all([vis.incar['EDIFFG']==-0.01 for vis in ads_vis])
         assert all([vis.incar['ISIF']==2 for vis in ads_vis])
         self.lp.add_wf(wf)
-        rapidfire(self.lp, fworker=FWorker(env={"db_file": os.path.join(db_dir, "db.json")}))
-
-        import pdb; pdb.set_trace()
+        rapidfire(self.lp, fworker=FWorker(env={"db_file": os.path.join(db_dir, "db.json")})) 
         # check relaxation
         d = self.get_task_collection().find_one({"task_label": "H1-Ir_(1, 0, 0) adsorbate optimization 1"})
         self._check_run(d, mode="H1-Ir_(1, 0, 0) adsorbate optimization 1")
