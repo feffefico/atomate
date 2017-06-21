@@ -12,12 +12,14 @@ import numpy as np
 from monty.json import MontyEncoder
 
 from fireworks import FiretaskBase, FWAction, explicit_serialize
-from fireworks.utilities.fw_serializers import DATETIME_HANDLER
+from fireworks.utilities.fw_serializers import DATETIME_HANDLER, recursive_dict
 
 from pymatgen import Structure
 from pymatgen.analysis.elasticity.elastic import ElasticTensor
 from pymatgen.analysis.elasticity.strain import IndependentStrain, Strain
 from pymatgen.analysis.elasticity.stress import Stress
+from pymatgen.analysis.reaction_calculator import ComputedReaction
+from pymatgen.entries.computed_entries import ComputedEntry
 from pymatgen.electronic_structure.boltztrap import BoltztrapAnalyzer
 from pymatgen.io.vasp.sets import get_vasprun_outcar
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -308,6 +310,82 @@ class ElasticTensorToDb(FiretaskBase):
 
 
 @explicit_serialize
+class SlabToDb(FiretaskBase):
+    """
+    Analyzes the slab data of an adsorption workflow to produce
+    the surface energy and adsorption energies
+    """
+
+    required_params = ['slab']
+    optional_params = ['db_file']
+
+    def run_task(self, fw_spec):
+
+        def get_computed_entry(result_dict):
+            return ComputedEntry(result_dict['structure'].composition, 
+                                 result_dict['energy'])
+
+        input_slab = self['slab']
+        miller_index = getattr(input_slab, 'miller_index', None)
+        doc = {"formula_pretty": input_slab.composition.reduced_formula,
+               "miller_index": miller_index, 'initial_slab': input_slab}
+        calc_slab = fw_spec.get('slab')
+        m = calc_slab['structure'].lattice.matrix
+        area = np.linalg.norm(np.cross(m[0], m[1])) 
+        doc.update({"calc_slab": {"structure": calc_slab["structure"].as_dict(),
+            "energy": calc_slab['energy'], "area": area}})
+
+        slab_entry = get_computed_entry(calc_slab)
+
+
+        # Process references
+        references = fw_spec.get('references', {})
+        reference_dict = {}
+        computed_references = []
+        for n, reference in references.items():
+            ref_struct = reference['structure']
+            reference_dict.update({ref_struct.composition.reduced_formula: reference})
+            computed_references.append(get_computed_entry(reference))
+        doc.update({"references": reference_dict})
+
+        # Calculate surface energy if attached to a bulk calculation
+        bulk = fw_spec.get('bulk', None)
+        if bulk:
+            bulk_entry = get_computed_entry(bulk)
+            coeffs = ComputedReaction([bulk_entry], [slab_entry]).coeffs
+            surface_energy = (bulk_entry.energy * coeffs[0] \
+                    + slab_entry.energy * coeffs[1]) / (area * 2)
+            doc.update({"surface_energy": surface_energy,
+                        "bulk": bulk})
+
+        # Calculate adsorption energy
+        adsorbate_results = fw_spec.get('adsorbates', {})
+        for adsorbate, results in adsorbate_results.items():
+            #TODO: add some geometrical analysis for n-fold etc.
+            for n, result in results.items():
+                if reference_dict:
+                    computed_adsorbate = get_computed_entry(result)
+                    reaction = ComputedReaction([slab_entry]+computed_references,
+                                                [computed_adsorbate])
+                    result.update({"adsorption_energy": reaction.calculated_reaction_energy})
+            minimum = sorted(results.values(), key=lambda x: x['adsorption_energy'])[0]
+            doc.update({"adsorbates": {adsorbate: {"all_configs": results, "minimum": minimum}}})
+
+        doc = recursive_dict(doc)
+        # Save analysis results in json or db
+        db_file = env_chk(self.get('db_file'), fw_spec)
+        if not db_file:
+            with open("surface.json", "w") as f:
+                f.write(json.dumps(doc, default=DATETIME_HANDLER))
+        else:
+            db = VaspCalcDb.from_db_file(db_file, admin=True)
+            db.collection = db.db["surfaces"]
+            db.collection.insert_one(doc)
+            logger.info("Surface analysis complete.")
+        return FWAction()
+
+
+@explicit_serialize
 class RamanTensorToDb(FiretaskBase):
     """
     Raman susceptibility tensor for each mode = Finite difference derivative of the dielectric
@@ -335,7 +413,7 @@ class RamanTensorToDb(FiretaskBase):
         # To convert the frequency to cm^-1: multiply sqrt(-e_i) by 82.995
         nm_frequencies = np.sqrt(np.abs(nm_eigenvals)) * 82.995  # cm^-1
 
-        d = {"structure": structure.as_dict(),
+        d = {"structure": structure,
              "normalmodes": {"eigenvals": fw_spec["normalmodes"]["eigenvals"],
                              "eigenvecs": fw_spec["normalmodes"]["eigenvecs"]
                              },
