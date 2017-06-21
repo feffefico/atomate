@@ -88,12 +88,12 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
                         db_file=db_file, parents=parents, job_type="normal")
 
 
-def get_wf_surface(slabs, adsorbates=[], bulk_structure=None, slab_gen_params=None, vasp_cmd="vasp",
+def get_wf_surface(slab, adsorbates=[], bulk_structure=None, slab_gen_params=None, vasp_cmd="vasp",
                    db_file=None, ads_structures_params={}, reference_molecules=[]):
     """
 
     Args:
-        slab ([Slab or Structure]): slab to calculate
+        slab (Slab or Structure): slab to calculate
         adsorbates ([Molecules]): molecules to place as adsorbates
         bulk_structure (Structure): bulk structure from which generate slabs
             after reoptimization.  If supplied, workflow will begin with
@@ -112,6 +112,7 @@ def get_wf_surface(slabs, adsorbates=[], bulk_structure=None, slab_gen_params=No
     """
     fws = []
 
+    # Add bulk
     if bulk_structure:
         vis = MVLSlabSet(bulk_structure, bulk=True)
         bulk_fw = OptimizeFW(bulk_structure, vasp_input_set=vis, vasp_cmd="vasp", db_file=db_file)
@@ -120,6 +121,7 @@ def get_wf_surface(slabs, adsorbates=[], bulk_structure=None, slab_gen_params=No
     else:
         bulk_fw = None
 
+    # Add molecules
     mol_fws = []
     for n, molecule in enumerate(reference_molecules):
         # molecule in box
@@ -133,36 +135,34 @@ def get_wf_surface(slabs, adsorbates=[], bulk_structure=None, slab_gen_params=No
         mol_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
                                              mod_spec_key="references->{}".format(n)))
         fws.append(mol_fw)
-        mol_fws.append(mol_fw)
 
-    for slab in slabs:
-        name = slab.composition.reduced_formula
-        if getattr(slab, "miller_index", None):
-            name += "_{}".format(slab.miller_index)
+    # Add slab
+    name = slab.composition.reduced_formula
+    if getattr(slab, "miller_index", None):
+        name += "_{}".format(slab.miller_index)
 
-        slab_fw = get_slab_fw(slab, bulk_structure, slab_gen_params, db_file=db_file,
-                              vasp_cmd=vasp_cmd, parents=bulk_fw, name=name+" slab optimization")
-        slab_fw.tasks.append(
-            pass_vasp_result(pass_dict=se_pass_dict, mod_spec_key="slab"))
+    slab_fw = get_slab_fw(slab, bulk_structure, slab_gen_params, db_file=db_file,
+                          vasp_cmd=vasp_cmd, parents=bulk_fw, name=name+" slab optimization")
+    slab_fw.tasks.append(
+        pass_vasp_result(pass_dict=se_pass_dict, mod_spec_key="slab"))
 
-        fws.append(slab_fw)
-        ads_fws = []
-        for adsorbate in adsorbates:
-            ads_slabs = AdsorbateSiteFinder(slab).generate_adsorption_structures(
-                adsorbate, **ads_structures_params)
-            for n, ads_slab in enumerate(ads_slabs):
-                ads_name = "{}-{} adsorbate optimization {}".format(adsorbate.composition.formula, name, n)
-                ads_fw = get_slab_fw(ads_slab, bulk_structure, slab_gen_params, db_file=db_file,
-                                     vasp_cmd=vasp_cmd, parents=bulk_fw, name=ads_name)
-                ads_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
-                    mod_spec_key="adsorbates->{}->{}".format(adsorbate.composition.formula, n)))
-                ads_fws.append(ads_fw)
-        fws.extend(ads_fws)
+    fws.append(slab_fw)
 
-        # Add analysis task for each slab
-        fws.append(Firework(SlabToDb(slab=slab, db_file=db_file), 
-                            parents=[slab_fw, bulk_fw] + ads_fws + mol_fws,
-                            name="Analyze Slab"))
+    # Add adsorbates
+    for adsorbate in adsorbates:
+        ads_slabs = AdsorbateSiteFinder(slab).generate_adsorption_structures(
+            adsorbate, **ads_structures_params)
+        for n, ads_slab in enumerate(ads_slabs):
+            ads_name = "{}-{} adsorbate optimization {}".format(adsorbate.composition.formula, name, n)
+            ads_fw = get_slab_fw(ads_slab, bulk_structure, slab_gen_params, db_file=db_file,
+                                 vasp_cmd=vasp_cmd, parents=bulk_fw, name=ads_name)
+            ads_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict,
+                mod_spec_key="adsorbates->{}->{}".format(adsorbate.composition.formula, n)))
+            fws.append(ads_fw)
+
+    # Add analysis task
+    fws.append(Firework(SlabToDb(slab=slab, db_file=db_file), 
+                        parents=fws[::], name="Analyze Slab"))
     return Workflow(fws, name="")
 
 
