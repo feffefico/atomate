@@ -36,8 +36,9 @@ class TestAdsorptionWorkflow(AtomateTest):
         slabs = generate_all_slabs(self.struct_ir, **sgp)
         slabs = [slab for slab in slabs if slab.miller_index==(1, 0, 0)]
         sgp.pop("max_index")
-        self.wf_1 = get_wf_surface(slabs, [Molecule("H", [[0, 0, 0]])], self.struct_ir, sgp,
-                                  db_file=os.path.join(db_dir, "db.json"))
+        H2 = Molecule('HH', [[0, 0, 0], [0, 0, 0.7]])
+        self.wf_1 = get_wf_surface(slabs[0], [Molecule("H", [[0, 0, 0]])], self.struct_ir, sgp,
+                                  db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2])
 
     def _simulate_vasprun(self, wf):
         reference_dir = os.path.abspath(os.path.join(ref_dir, "adsorbate_wf"))
@@ -45,35 +46,45 @@ class TestAdsorptionWorkflow(AtomateTest):
                        "Ir-Ir_(1, 0, 0) slab optimization": os.path.join(reference_dir, "2"),
                        "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 0": os.path.join(reference_dir, "3"),
                        "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 1": os.path.join(reference_dir, "4"),
-                       "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 2": os.path.join(reference_dir, "5")}
+                       "Ir-H1-Ir_(1, 0, 0) adsorbate optimization 2": os.path.join(reference_dir, "5"),
+                       "H2-structure optimization": os.path.join(reference_dir, "H2_molecule")}
         return use_fake_vasp(wf, ir_ref_dirs, params_to_check=["ENCUT", "ISIF", "IBRION"])
 
     def _check_run(self, d, mode):
-        if mode not in ["H1-Ir_(1, 0, 0) adsorbate optimization 1"]:
+        if mode not in ["H1-Ir_(1, 0, 0) adsorbate optimization 1", "surface analysis"]:
             raise ValueError("Invalid mode!")
 
         if "adsorbate" in mode:
             self.assertEqual(d["formula_reduced_abc"], "H1 Ir16")
-        # Check relaxation of adsorbate
-        # Check slab calculations
-        # Check structure optimization
+        
+        if "analysis" in mode:
+            self.assertEqual(tuple(d['miller_index']), (1, 0, 0))
+            self.assertAlmostEqual(d['surface_energy'], 0.16687282)
+            self.assertAlmostEqual(d['adsorbates']['H1']['minimum']['adsorption_energy'], -0.49227153)
 
     def test_wf(self):
         wf = self._simulate_vasprun(self.wf_1)
 
-        self.assertEqual(len(self.wf_1.fws), 5)
+        self.assertEqual(len(self.wf_1.fws), 7)
         # check vasp parameters for ionic relaxation
         ads_vis = [fw.tasks[1]['vasp_input_set']
                    for fw in self.wf_1.fws if "adsorbate" in fw.name]
         assert all([vis.incar['EDIFFG']==-0.01 for vis in ads_vis])
         assert all([vis.incar['ISIF']==2 for vis in ads_vis])
         self.lp.add_wf(wf)
-        rapidfire(self.lp, fworker=FWorker(env={"db_file": os.path.join(db_dir, "db.json")}))
-
+        rapidfire(self.lp, fworker=FWorker(env={"db_file": os.path.join(db_dir, "db.json")})) 
         # check relaxation
         d = self.get_task_collection().find_one({"task_label": "H1-Ir_(1, 0, 0) adsorbate optimization 1"})
         self._check_run(d, mode="H1-Ir_(1, 0, 0) adsorbate optimization 1")
+        
+        d = self.get_task_collection(coll_name="surfaces").find_one()
+        self._check_run(d, mode="surface analysis")
 
+
+        # check analysis
+
+
+        # check workflow completion
         wf = self.lp.get_wf_by_fw_id(1)
         self.assertTrue(all([s == 'COMPLETED' for s in wf.fw_states.values()]))
 
