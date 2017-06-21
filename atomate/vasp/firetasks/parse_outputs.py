@@ -320,9 +320,13 @@ class SlabToDb(FiretaskBase):
         doc = {"formula_pretty": input_slab.composition.reduced_formula,
                "miller_index": miller_index, 'initial_slab': input_slab}
         calc_slab = fw_spec.get('slab')
+        m = calc_slab['structure'].lattice.matrix
+        area = np.linalg.norm(np.cross(m[0], m[1])) 
         doc.update({"calc_slab": {"structure": calc_slab["structure"].as_dict(),
-                                  "energy": calc_slab['energy']}})
+            "energy": calc_slab['energy'], "area": area}})
+
         slab_entry = get_computed_entry(calc_slab)
+
 
         # Process references
         references = fw_spec.get('references', {})
@@ -338,8 +342,9 @@ class SlabToDb(FiretaskBase):
         bulk = fw_spec.get('bulk', None)
         if bulk:
             bulk_entry = get_computed_entry(bulk)
-            reaction = ComputedReaction([bulk_entry], [slab_entry])
-            surface_energy = reaction.calculated_reaction_energy / 2
+            coeffs = ComputedReaction([bulk_entry], [slab_entry]).coeffs
+            surface_energy = (bulk_entry.energy * coeffs[0] \
+                    + slab_entry.energy * coeffs[1]) / (area * 2)
             doc.update({"surface_energy": surface_energy,
                         "bulk": bulk})
 
