@@ -19,7 +19,9 @@ from pymatgen.core.surface import generate_all_slabs, Slab
 from pymatgen.transformations.advanced_transformations import SlabTransformation
 from pymatgen.transformations.standard_transformations import SupercellTransformation
 from pymatgen.io.vasp.sets import MVLSlabSet
-from pymatgen import Structure, Lattice
+from pymatgen.io.vasp.inputs import Kpoints
+from pymatgen import Structure, Lattice, Molecule
+from pymatgen.entries.computed_entries import ComputedEntry
 
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
@@ -88,19 +90,21 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
                         db_file=db_file, parents=parents, job_type="normal")
 
 
-def get_wf_surface(slab, adsorbates=[], bulk_structure=None, slab_gen_params=None, vasp_cmd="vasp",
-                   db_file=None, ads_structures_params={}, reference_molecules=[]):
+def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None, vasp_cmd="vasp",
+                   db_file=None, asf_params = {}, ads_structures_params={}, reference_molecules=[]):
     """
 
     Args:
         slab (Slab or Structure): slab to calculate
         adsorbates ([Molecules]): molecules to place as adsorbates
-        bulk_structure (Structure): bulk structure from which generate slabs
+        bulk_structure (Structure or ComputedEntry): bulk structure from which generate slabs
             after reoptimization.  If supplied, workflow will begin with
             bulk structure optimization.
         slab_gen_params (dict): dictionary of slab generation parameters
             used to generate the slab, necessary to get the slab
             that corresponds to the bulk structure if in that mode
+        asf_params (dict): parameters to be supplied as kwargs to AdsorbateSiteFinder
+            __init__ constructor
         ads_structures_params (dict): parameters to be supplied as
             kwargs to AdsorbateSiteFinder.generate_adsorption_structures
         db_file (string): path to database file
@@ -113,28 +117,33 @@ def get_wf_surface(slab, adsorbates=[], bulk_structure=None, slab_gen_params=Non
     fws = []
 
     # Add bulk
-    if bulk_structure:
-        vis = MVLSlabSet(bulk_structure, bulk=True)
-        bulk_fw = OptimizeFW(bulk_structure, vasp_input_set=vis, vasp_cmd="vasp", db_file=db_file)
-        bulk_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, mod_spec_key="bulk"))
+    if isinstance(bulk, Structure):
+        vis = MVLSlabSet(bulk, bulk=True)
+        bulk_fw = OptimizeFW(bulk, vasp_input_set=vis, vasp_cmd=vasp_cmd, db_file=db_file)
+        bulk_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, filename='vasprun.xml.relax2.gz', mod_spec_key="bulk"))
+        bulk_structure = bulk
         fws.append(bulk_fw)
     else:
+        if isinstance(bulk, ComputedEntry):
+            pass_se_dict.update({"bulk": bulk})
         bulk_fw = None
+        bulk_structure = None
 
     # Add molecules
     mol_fws = []
     for n, molecule in enumerate(reference_molecules):
-        # molecule in box
-        m_struct = Structure(Lattice.cubic(15), molecule.species_and_occu,
-                             molecule.cart_coords, coords_are_cartesian=True)
-        m_struct.translate_sites(list(range(len(m_struct))),
-                             np.array([0.5]*3) - np.average(m_struct.frac_coords, axis=0))
-        vis = MVLSlabSet(m_struct, user_kpoints_settings={"length": 1e-10})
-        mol_fw = OptimizeFW(molecule, job_type="normal", vasp_input_set=vis,
-                            db_file=db_file, vasp_cmd=vasp_cmd)
-        mol_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
-                                             mod_spec_key="references->{}".format(n)))
-        fws.append(mol_fw)
+        if isinstance(molecule, Molecule):
+            # molecule in box
+            m_struct = molecule.get_boxed_structure(10, 10, 10)
+            kpoints = Kpoints(kpts = [[1, 1, 1]])
+            vis = MVLSlabSet(m_struct, user_kpoints_settings=kpoints)
+            mol_fw = OptimizeFW(molecule, job_type="normal", vasp_input_set=vis,
+                                db_file=db_file, vasp_cmd=vasp_cmd, handler_group="md")
+            mol_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
+                                                 mod_spec_key="references->{}".format(n)))
+            fws.append(mol_fw)
+        elif isinstance(molecule, ComputedEntry):
+            pass_se_dict.update({"references":{"{}".format(n): molecule}})
 
     # Add slab
     name = slab.composition.reduced_formula
@@ -150,7 +159,7 @@ def get_wf_surface(slab, adsorbates=[], bulk_structure=None, slab_gen_params=Non
 
     # Add adsorbates
     for adsorbate in adsorbates:
-        ads_slabs = AdsorbateSiteFinder(slab).generate_adsorption_structures(
+        ads_slabs = AdsorbateSiteFinder(slab, **asf_params).generate_adsorption_structures(
             adsorbate, **ads_structures_params)
         for n, ads_slab in enumerate(ads_slabs):
             ads_name = "{}-{} adsorbate optimization {}".format(adsorbate.composition.formula, name, n)
@@ -163,7 +172,7 @@ def get_wf_surface(slab, adsorbates=[], bulk_structure=None, slab_gen_params=Non
     # Add analysis task
     fws.append(Firework(SlabToDb(slab=slab, db_file=db_file), 
                         parents=fws[::], name="Analyze Slab"))
-    return Workflow(fws, name="")
+    return Workflow(fws, name=name + " surface")
 
 
 def get_wf_surface_all_slabs(bulk_structure, molecules, max_index=1, slab_gen_params=None, **kwargs):
