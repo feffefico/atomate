@@ -32,7 +32,7 @@ def env_chk(val, fw_spec, strict=True, default=None):
     Otherwise, the string "val" is interpreted literally and passed-through as is.
 
     The fw_spec["_fw_env"] is in turn set by the FWorker. For more details,
-    see: https://pythonhosted.org/FireWorks/worker_tutorial.html
+    see: https://hackingmaterials.lbl.gov/fireworks/worker_tutorial.html
 
     Since the fw_env can be set differently for each FireWorker, one can
     use this method to translate a single "val" into multiple possibilities,
@@ -106,7 +106,10 @@ def recursive_get_result(d, result):
         return get_mongolike(result, d[2:])
 
     elif isinstance(d, six.string_types) and d[:3] == "a>>":
-        return getattr(result, d[3:])
+        attribute = getattr(result, d[3:])
+        if callable(attribute):
+            attribute = attribute()
+        return attribute
     
     elif isinstance(d, dict):
         return {k: recursive_get_result(v, result) for k, v in d.items()}
