@@ -136,7 +136,8 @@ def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None,
     elif isinstance(bulk, ComputedEntry):
         pass_dict = {"computed_entry": bulk}
         bulk_fw = Firework([pass_vasp_result({"computed_entry": bulk},
-                                             mod_spec_key="bulk")])
+                                             mod_spec_key="bulk")], 
+                           name="Pass bulk {}".format(bulk.composition.formula))
         wf = Workflow([bulk_fw], name=name+" surface")
         bulk_structure = getattr(bulk, "structure", None)
     elif bulk is None:
@@ -207,8 +208,9 @@ def get_wf_molecules(molecules, vasp_cmd='vasp', db_file=None, box_size=10, **kw
         elif isinstance(molecule, ComputedEntry):
             pass_dict = {"computed_entry": molecule}
             mol_fw = Firework([pass_vasp_result({"computed_entry": molecule}, 
-                                                mod_spec_key="references->{}".format(n))])
-            fws.append(mol_fw)
+                                                mod_spec_key="references->{}".format(n))],
+                              name="Pass molecular {}".format(molecule.composition.formula))
+            mol_fws.append(mol_fw)
     return Workflow(mol_fws, **kwargs)
 
 
