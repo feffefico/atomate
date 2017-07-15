@@ -30,7 +30,7 @@ se_pass_dict = {'energy': '>>output.final_energy',
                 'structure': '>>output.crystal'}
 
 def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vasp_input_set=None,
-                parents=None, vasp_cmd="vasp", name=""):
+                copy_vasp_outputs=False, vasp_cmd="vasp", name="", **kwargs):
     """
     Function to generate a a slab firework.  Returns a TransmuterFW if bulk_structure is specified,
     constructing the necessary transformations from the slab and slab generator parameters,
@@ -50,6 +50,7 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
         parents (Fireworks or list of ints): parent FWs
         db_file (string): path to database file
         vasp_cmd (string): vasp command
+        **kwargs (kwargs): keyword arguments for Firework
 
     Returns:
         Firework
@@ -83,20 +84,20 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
                          "coords": [site.frac_coords for site in ads_sites]},
                         {"site_properties": slab.site_properties}]
         return TransmuterFW(name=name, structure=bulk_structure, transformations=transformations,
-                          transformation_params=trans_params, copy_vasp_outputs=True, db_file=db_file,
-                          vasp_cmd=vasp_cmd, parents=parents, vasp_input_set=vasp_input_set)
+                            transformation_params=trans_params, copy_vasp_outputs=copy_vasp_outputs, 
+                            db_file=db_file, vasp_cmd=vasp_cmd, vasp_input_set=vasp_input_set, **kwargs)
     else:
         return OptimizeFW(name=name, structure=slab, vasp_input_set=vasp_input_set, vasp_cmd=vasp_cmd,
-                        db_file=db_file, parents=parents, job_type="normal")
+                          db_file=db_file, parents=parents, job_type="normal", **kwargs)
 
 
 def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None, vasp_cmd="vasp",
-                   db_file=None, asf_params = {}, ads_structures_params={}, reference_molecules=[]):
+                   db_file=None, asf_params={}, ads_structures_params={}, reference_molecules=[]):
     """
 
     Args:
         slab (Slab or Structure): slab to calculate
-        adsorbates ([Molecules]): molecules to place as adsorbates
+        adsorbates ([Molecule]): molecules to place as adsorbates
         bulk_structure (Structure or ComputedEntry): bulk structure from which generate slabs
             after reoptimization.  If supplied, workflow will begin with
             bulk structure optimization.
@@ -109,51 +110,47 @@ def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None, vasp_cm
             kwargs to AdsorbateSiteFinder.generate_adsorption_structures
         db_file (string): path to database file
         vasp_cmd (string): vasp command
-        reference_molecules (list of molecules and coefficients):
-
+        reference_molecules ([Molecule or ComputedEntry]): list of molecular
+            references.  If molecules are Molecule objects, vasp FWs to calculate
+            their energies are appended.  If ComputedEntries, the computed
+            entries are passed.
     Returns:
         Workflow
     """
-    fws = []
-
-    # Add bulk
-    if isinstance(bulk, Structure):
-        vis = MVLSlabSet(bulk, bulk=True)
-        bulk_fw = OptimizeFW(bulk, vasp_input_set=vis, vasp_cmd=vasp_cmd, db_file=db_file)
-        bulk_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, filename='vasprun.xml.relax2.gz', mod_spec_key="bulk"))
-        bulk_structure = bulk
-        fws.append(bulk_fw)
-    else:
-        if isinstance(bulk, ComputedEntry):
-            pass_se_dict.update({"bulk": bulk})
-        bulk_fw = None
-        bulk_structure = None
-
-    # Add molecules
-    mol_fws = []
-    for n, molecule in enumerate(reference_molecules):
-        if isinstance(molecule, Molecule):
-            # molecule in box
-            m_struct = molecule.get_boxed_structure(10, 10, 10)
-            kpoints = Kpoints(kpts = [[1, 1, 1]])
-            vis = MVLSlabSet(m_struct, user_kpoints_settings=kpoints)
-            mol_fw = OptimizeFW(molecule, job_type="normal", vasp_input_set=vis,
-                                db_file=db_file, vasp_cmd=vasp_cmd, handler_group="md")
-            mol_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
-                                                 mod_spec_key="references->{}".format(n)))
-            fws.append(mol_fw)
-        elif isinstance(molecule, ComputedEntry):
-            pass_se_dict.update({"references":{"{}".format(n): molecule}})
-
-    # Add slab
+    # Get name from slab info 
     name = slab.composition.reduced_formula
     if getattr(slab, "miller_index", None):
         name += "_{}".format(slab.miller_index)
 
-    slab_fw = get_slab_fw(slab, bulk_structure, slab_gen_params, db_file=db_file,
-                          vasp_cmd=vasp_cmd, parents=bulk_fw, name=name+" slab optimization")
-    slab_fw.tasks.append(
-        pass_vasp_result(pass_dict=se_pass_dict, mod_spec_key="slab"))
+    wf = None
+    # Add bulk
+    if isinstance(bulk, Structure):
+        vis = MVLSlabSet(bulk, bulk=True)
+        bulk_fw = OptimizeFW(bulk, vasp_input_set=vis, vasp_cmd=vasp_cmd, db_file=db_file)
+        bulk_fw.tasks.append(pass_vasp_result(filename='vasprun.xml.relax2.gz',
+                                              mod_spec_key="bulk"))
+        bulk_structure = bulk
+        wf = Workflow(bulk_fw, name=name+" surface"))
+    elif isinstance(bulk, ComputedEntry):
+        pass_dict = {"computed_entry": bulk}
+        bulk_fw = Firework([pass_vasp_result({"computed_entry": bulk},
+                                             mod_spec_key="bulk")])
+        wf = Workflow(bulk_fw, name=name+" surface")
+        bulk_structure = getattr(bulk, "structure", None)
+    elif bulk is None:
+        bulk_structure = None
+    else:
+        raise ValueError("bulk must be Structure or ComputedEntry")
+
+
+    # Add slab, copy vasp outputs if bulk is a Structure
+    fws = []
+    copy_vasp_outputs = isinstance(bulk, Structure)
+
+    slab_fw = get_slab_fw(slab, bulk_structure, slab_gen_params, db_file=db_file, 
+                          vasp_cmd=vasp_cmd, name=name+" slab optimization",
+                          copy_vasp_outputs=copy_vasp_outputs)
+    slab_fw.tasks.append(pass_vasp_result(mod_spec_key="slab"))
 
     fws.append(slab_fw)
 
@@ -168,11 +165,49 @@ def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None, vasp_cm
             ads_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict,
                 mod_spec_key="adsorbates->{}->{}".format(adsorbate.composition.formula, n)))
             fws.append(ads_fw)
+    
+    # Join optimize
+    if wf:
+        wf.append_wf(Workflow(fws), wf.leaf_fw_ids)
+    else:
+        wf = Workflow(fws, name=name + " surface")
+
+    # Add molecules
+    if reference_molecules:
+        kpoints = Kpoints(kpts = [[1, 1, 1]])
+        vis = MVLSlabSet(m_struct, user_kpoints_settings=kpoints)
+        wf_molecules = get_wf_molecules(reference_molecules, vasp_cmd=vasp_cmd,
+                                        db_file=db_file, vasp_input_set=vis)
 
     # Add analysis task
     fws.append(Firework(SlabToDb(slab=slab, db_file=db_file), 
                         parents=fws[::], name="Analyze Slab"))
     return Workflow(fws, name=name + " surface")
+
+
+def get_wf_molecules(molecules, vasp_cmd='vasp', db_file=None, box_size=[10, 10, 10],
+                     vasp_input_set=vasp_input_set, **wf_kwargs):
+    """
+    Helper function that gets a workflow for molecules in VASP,
+    can be used in conjunction with the surface workflow or
+    independently.
+    """
+    mol_fws = []
+    for n, molecule in enumerate(reference_molecules):
+        if isinstance(molecule, Molecule):
+            # molecule in box
+            m_struct = molecule.get_boxed_structure(*box_size)
+            mol_fw = OptimizeFW(molecule, job_type="normal", vasp_input_set=vasp_input_set,
+                                db_file=db_file, vasp_cmd=vasp_cmd, handler_group="md")
+            mol_fw.tasks.append(pass_vasp_result(pass_dict=se_pass_dict, 
+                                                 mod_spec_key="references->{}".format(n)))
+            fws.append(mol_fw)
+        elif isinstance(molecule, ComputedEntry):
+            pass_dict = {"computed_entry": molecule}
+            mol_fw = Firework([pass_vasp_result({"computed_entry": molecule}, 
+                                                mod_spec_key="references->{}".format(n))])
+            fws.append(mol_fw)
+    return Workflow(mol_fws, **wf_kwargs)
 
 
 def get_wf_surface_all_slabs(bulk_structure, molecules, max_index=1, slab_gen_params=None, **kwargs):
