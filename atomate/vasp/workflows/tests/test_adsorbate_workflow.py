@@ -14,6 +14,7 @@ from atomate.utils.testing import AtomateTest
 
 from pymatgen import Structure, Molecule, Lattice
 from pymatgen.core.surface import generate_all_slabs
+from pymatgen.io.vasp.outputs import Vasprun
 
 __author__ = 'Kiran Mathew, Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
@@ -37,8 +38,16 @@ class TestAdsorptionWorkflow(AtomateTest):
         slabs = [slab for slab in slabs if slab.miller_index==(1, 0, 0)]
         sgp.pop("max_index")
         H2 = Molecule('HH', [[0, 0, 0], [0, 0, 0.7]])
+        H2_vr = os.path.join(ref_dir, "adsorbate_wf/H2_molecule/outputs/vasprun.xml.gz")
+        H2_comp_entry = Vasprun(H2_vr).get_computed_entry()
+        bulk_vr = os.path.join(ref_dir, "adsorbate_wf/1/outputs/vasprun.xml.relax2.gz")
+        bulk_comp_entry = Vasprun(bulk_vr).get_computed_entry()
         self.wf_1 = get_wf_surface(slabs[0], [Molecule("H", [[0, 0, 0]])], self.struct_ir, sgp,
-                                  db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2])
+                                   db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2])
+        self.wf_molecule_ce = get_wf_surface(slabs[0], [Molecule("H", [[0, 0, 0]])], self.struct_ir, sgp,
+                db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2_comp_entry])
+        self.wf_bulk_ce = get_wf_surface(slabs[0], [Molecule("H", [[0, 0, 0]])], bulk_comp_entry, sgp,
+                db_file=os.path.join(db_dir, "db.json"), reference_molecules=[H2_comp_entry])
 
     def _simulate_vasprun(self, wf):
         reference_dir = os.path.abspath(os.path.join(ref_dir, "adsorbate_wf"))
@@ -64,8 +73,11 @@ class TestAdsorptionWorkflow(AtomateTest):
 
     def test_wf(self):
         wf = self._simulate_vasprun(self.wf_1)
-
+        wf2 = self._simulate_vasprun(self.wf_molecule_ce)
+        wf3 = self._simulate_vasprun(self.wf_bulk_ce)
         self.assertEqual(len(self.wf_1.fws), 7)
+        self.assertEqual(self.wf_molecule_ce.fws[1].name, "Pass molecular H2")
+        self.assertEqual(self.wf_bulk_ce.fws[-1].name, "Pass bulk Ir4")
         # check vasp parameters for ionic relaxation
         ads_vis = [fw.tasks[0]['vasp_input_set']
                    for fw in self.wf_1.fws if "adsorbate" in fw.name]
@@ -76,13 +88,10 @@ class TestAdsorptionWorkflow(AtomateTest):
         # check relaxation
         d = self.get_task_collection().find_one({"task_label": "H1-Ir_(1, 0, 0) adsorbate optimization 1"})
         self._check_run(d, mode="H1-Ir_(1, 0, 0) adsorbate optimization 1")
-        
-        d = self.get_task_collection(coll_name="surfaces").find_one()
-        self._check_run(d, mode="surface analysis")
 
-
-        # check analysis
-
+        ds = self.get_task_collection(coll_name="surfaces").find()
+        for d in ds:
+            self._check_run(d, mode="surface analysis")
 
         # check workflow completion
         wf = self.lp.get_wf_by_fw_id(1)
