@@ -56,7 +56,7 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
         Firework
     """
     vasp_input_set = vasp_input_set or MVLSlabSet(
-            slab, user_incar_settings={"EDIFFG": -0.05}, k_product=30)
+            slab, user_incar_settings={"EDIFFG": -0.05, "NSW": 25}, k_product=30)
 
     # If a bulk_structure is specified, generate the set of transformations, else
     # just create an optimize FW with the slab
