@@ -234,7 +234,7 @@ def pass_vasp_result(pass_dict=None, calc_dir='.', filename="vasprun.xml.gz", pa
             e.g. mod_spec_key or mod_spec_cmd
         
     """
-    pass_dict = pass_dict or {"computed_entry": "a>>get_computed_entry"}
+    pass_dict = pass_dict or {"computed_entry": "a>>get_computed_entry", "structure": ">>output.crystal"}
     parse_kwargs = {"filename": filename, "parse_eigen": parse_eigen, "parse_dos":parse_dos}
     return PassResult(pass_dict=pass_dict, calc_dir=calc_dir, parse_kwargs=parse_kwargs,
                       parse_class="pymatgen.io.vasp.outputs.Vasprun", **kwargs)

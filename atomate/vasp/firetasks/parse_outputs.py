@@ -361,10 +361,6 @@ class SlabToDb(FiretaskBase):
 
     def run_task(self, fw_spec):
 
-        def get_computed_entry(result_dict):
-            return ComputedEntry(result_dict['structure'].composition, 
-                                 result_dict['energy'])
-
         input_slab = self['slab']
         miller_index = getattr(input_slab, 'miller_index', None)
         doc = {"formula_pretty": input_slab.composition.reduced_formula,
@@ -372,26 +368,18 @@ class SlabToDb(FiretaskBase):
         calc_slab = fw_spec.get('slab')
         m = calc_slab['structure'].lattice.matrix
         area = np.linalg.norm(np.cross(m[0], m[1])) 
+        slab_entry = calc_slab['computed_entry']
         doc.update({"calc_slab": {"structure": calc_slab["structure"].as_dict(),
-            "energy": calc_slab['energy'], "area": area}})
-
-        slab_entry = get_computed_entry(calc_slab)
-
+                                  "energy": slab_entry.energy, "area": area}})
 
         # Process references
-        references = fw_spec.get('references', {})
-        reference_dict = {}
-        computed_references = []
-        for n, reference in references.items():
-            ref_struct = reference['structure']
-            reference_dict.update({ref_struct.composition.reduced_formula: reference})
-            computed_references.append(get_computed_entry(reference))
-        doc.update({"references": reference_dict})
+        references = [v['computed_entry'] for v in fw_spec.get('references', {}).values()]
+        doc.update({"references": references})
 
         # Calculate surface energy if attached to a bulk calculation
         bulk = fw_spec.get('bulk', None)
         if bulk:
-            bulk_entry = get_computed_entry(bulk)
+            bulk_entry = bulk['computed_entry']
             coeffs = ComputedReaction([bulk_entry], [slab_entry]).coeffs
             surface_energy = (bulk_entry.energy * coeffs[0] \
                     + slab_entry.energy * coeffs[1]) / (area * 2)
@@ -403,11 +391,10 @@ class SlabToDb(FiretaskBase):
         for adsorbate, results in adsorbate_results.items():
             #TODO: add some geometrical analysis for n-fold etc.
             for n, result in results.items():
-                if reference_dict:
-                    computed_adsorbate = get_computed_entry(result)
-                    reaction = ComputedReaction([slab_entry]+computed_references,
-                                                [computed_adsorbate])
-                    result.update({"adsorption_energy": reaction.calculated_reaction_energy})
+                computed_adsorbate = result['computed_entry']
+                reaction = ComputedReaction([slab_entry]+references,
+                                            [computed_adsorbate])
+                result.update({"adsorption_energy": reaction.calculated_reaction_energy})
             minimum = sorted(results.values(), key=lambda x: x['adsorption_energy'])[0]
             doc.update({"adsorbates": {adsorbate: {"all_configs": results, "minimum": minimum}}})
 
