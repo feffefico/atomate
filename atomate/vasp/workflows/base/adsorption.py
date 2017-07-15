@@ -26,8 +26,6 @@ from pymatgen.entries.computed_entries import ComputedEntry
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
 
-se_pass_dict = {'energy': '>>output.final_energy',
-                'structure': '>>output.crystal'}
 
 def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vasp_input_set=None,
                 copy_vasp_outputs=False, vasp_cmd="vasp", name="", **kwargs):
@@ -55,6 +53,8 @@ def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vas
     Returns:
         Firework
     """
+    # TODO: ideally, this should really be a double-relax style run with
+    #       EDIFFG: 0.01, IBRION: 2 and then EDIFFG: -0.05, IBRION: 1
     vasp_input_set = vasp_input_set or MVLSlabSet(
             slab, user_incar_settings={"EDIFFG": -0.05, "NSW": 25}, k_product=30)
 
@@ -127,7 +127,7 @@ def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None,
     wf = None
     # Add bulk
     if isinstance(bulk, Structure):
-        vis = MVLSlabSet(bulk, bulk=True)
+        vis = MVLSlabSet(bulk, bulk=True, k_product=30)
         bulk_fw = OptimizeFW(bulk, vasp_input_set=vis, vasp_cmd=vasp_cmd, db_file=db_file)
         bulk_fw.tasks.append(pass_vasp_result(filename='vasprun.xml.relax2.gz',
                                               mod_spec_key="bulk"))
