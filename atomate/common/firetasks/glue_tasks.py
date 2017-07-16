@@ -107,13 +107,16 @@ class PassResult(FiretaskBase):
             to "prev_calc_result"
     """
 
-    required_params = ["pass_dict", "parse_class", "parse_kwargs"]
-    optional_params = ["calc_dir", "mod_spec_cmd", "mod_spec_key"]
+    required_params = ["pass_dict"]
+    optional_params = ["parse_class", "parse_kwargs", "calc_dir",
+                       "mod_spec_cmd", "mod_spec_key"]
                        
     def run_task(self, fw_spec):
         pass_dict = self.get("pass_dict")
-        parse_kwargs = self.get("parse_kwargs")
-        pc_string = self.get("parse_class")
+        # Using None.__init__ here allows None to be the default, but
+        # ensures failure if a user specifies a pass_dict with a >> key.
+        pc_string = self.get("parse_class", "None.__init__")
+        parse_kwargs = self.get("parse_kwargs", {})
         parse_class = load_class(*pc_string.rsplit(".", 1))
         calc_dir = self.get("calc_dir", ".")
         with monty.os.cd(calc_dir):
