@@ -13,6 +13,7 @@ from fireworks import Workflow, Firework
 from atomate.vasp.fireworks.core import OptimizeFW, TransmuterFW, StaticFW
 from atomate.vasp.firetasks.glue_tasks import pass_vasp_result
 from atomate.vasp.firetasks.parse_outputs import SlabToDb
+from atomate.common.firetasks.glue_tasks import PassResult
 
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.core.surface import generate_all_slabs, Slab
@@ -135,8 +136,8 @@ def get_wf_surface(slab, adsorbates=[], bulk=None, slab_gen_params=None,
         wf = Workflow([bulk_fw], name=name+" surface")
     elif isinstance(bulk, ComputedEntry):
         pass_dict = {"computed_entry": bulk}
-        bulk_fw = Firework([pass_vasp_result({"computed_entry": bulk},
-                                             mod_spec_key="bulk")], 
+        bulk_fw = Firework([PassResult(pass_dict={"computed_entry": bulk},
+                                       mod_spec_key="bulk")], 
                            name="Pass bulk {}".format(bulk.composition.formula))
         wf = Workflow([bulk_fw], name=name+" surface")
         bulk_structure = getattr(bulk, "structure", None)
@@ -206,9 +207,8 @@ def get_wf_molecules(molecules, vasp_cmd='vasp', db_file=None, box_size=10, **kw
             mol_fw.tasks.append(pass_vasp_result(mod_spec_key="references->{}".format(n)))
             mol_fws.append(mol_fw)
         elif isinstance(molecule, ComputedEntry):
-            pass_dict = {"computed_entry": molecule}
-            mol_fw = Firework([pass_vasp_result({"computed_entry": molecule}, 
-                                                mod_spec_key="references->{}".format(n))],
+            mol_fw = Firework([PassResult(pass_dict={"computed_entry": molecule}, 
+                                          mod_spec_key="references->{}".format(n))],
                               name="Pass molecular {}".format(molecule.composition.formula))
             mol_fws.append(mol_fw)
     return Workflow(mol_fws, **kwargs)
