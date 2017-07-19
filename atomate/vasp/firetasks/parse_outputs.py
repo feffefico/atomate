@@ -24,6 +24,7 @@ from pymatgen.analysis.reaction_calculator import ComputedReaction
 from pymatgen.entries.computed_entries import ComputedEntry
 from pymatgen.electronic_structure.boltztrap import BoltztrapAnalyzer
 from pymatgen.io.vasp.sets import get_vasprun_outcar
+from pymatgen.io.vasp.outputs import Locpot, Vasprun
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 from atomate.common.firetasks.glue_tasks import get_calc_loc
@@ -47,6 +48,74 @@ class OERAnalysisTask(FiretaskBase):
 
     def run_task(self, fw_spec):
         pass
+
+
+@explicit_serialize
+class BandedgesToDb(FiretaskBase):
+    """
+    Analysis task for the JCAP workflow.  Finds
+    the bandedges from prior tasks.
+    
+    Required params:
+        structure (Structure): structure to use for symmetrization,
+            input structure.  If an optimization was used, will
+            look for relaxed structure in calc locs
+
+    Optional params:
+        db_file (str): path to file containing the database credentials.
+            Supports env_chk. Default: write data to JSON file.
+        she_potential (float): she potential to use
+            defaults to 4.4
+    """
+    required_params = ['structure']
+    optional_params = ['db_file', 'she_vacuum_potential', 'fw_spec_field']
+
+    def run_task(self, fw_spec):
+        struct = self['structure']
+        she_potential = self.get('she_vacuum_potential', None) or -4.4
+        calc_locs = {c['name']: c['path'] for c in fw_spec.get('calc_locs')}
+        lpot_slab = Locpot.from_file(os.path.join(calc_locs['slab_hse'], 'LOCPOT.gz'))
+        z_average = lpot_slab.get_average_along_axis(2)
+        vacuum = max(z_average)
+        vr_slab = Vasprun(os.path.join(calc_locs['slab_hse'], 'vasprun.xml.gz'))
+        (gap, cbm, vbm, is_direct) = vr_slab.eigenvalue_band_properties
+        slab_props = {'gap': gap, 'cbm': cbm, 'vbm': vbm, 'is_direct': is_direct,
+                      'structure': vr_slab.final_structure.as_dict(), 
+                      'incar': vr_slab.incar.as_dict(),
+                      'kpoints': vr_slab.kpoints.as_dict()}
+
+        slab_fermi = vr_slab.efermi
+        slab_cbm_vs_she = vacuum - slab_fermi - she_potential
+        vr_bulk = Vasprun(os.path.join(calc_locs['hse gap'], 'vasprun.xml.gz'))
+        (gap, cbm, vbm, is_direct) = vr_bulk.eigenvalue_band_properties
+        bulk_props = {'gap': gap, 'cbm': cbm, 'vbm': vbm, 'is_direct': is_direct,
+                      'structure': vr_bulk.final_structure.as_dict(), 
+                      'incar': vr_bulk.incar.as_dict(),
+                      'kpoints': vr_bulk.kpoints.as_dict()}
+        slab_vbm_vs_she = slab_cbm_vs_she + bulk_props['gap']
+        
+        doc = {'slab': slab_props,
+               'bulk': bulk_props,
+               'cb_vs_she': slab_cbm_vs_she,
+               'vb_vs_she': slab_vbm_vs_she,
+               'z_potential_slab': z_average,
+               'formula_pretty': vr_bulk.final_structure.composition.reduced_formula}
+        
+        if self.get("fw_spec_field"):
+            doc.update({self.get("fw_spec_field"): fw_spec.get(self.get("fw_spec_field"))})
+
+        db_file = env_chk(self.get('db_file'), fw_spec)
+        if not db_file:
+            with open("band_edges.json", "w") as f:
+                f.write(json.dumps(doc, default=DATETIME_HANDLER))
+        else:
+            db = VaspCalcDb.from_db_file(db_file, admin=True)
+            db.collection = db.db["band_edges"]
+            db.collection.insert_one(doc)
+            logger.info("Band edge analysis complete.")
+        
+        return FWAction()
+
 
 @explicit_serialize
 class VaspToDb(FiretaskBase):
