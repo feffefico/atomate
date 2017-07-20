@@ -10,7 +10,7 @@ from datetime import datetime
 
 import numpy as np
 
-from monty.json import MontyEncoder
+from monty.json import MontyEncoder, jsanitize
 
 from fireworks import FiretaskBase, FWAction, explicit_serialize
 from fireworks.utilities.fw_serializers import DATETIME_HANDLER, recursive_dict
@@ -85,7 +85,7 @@ class BandedgesToDb(FiretaskBase):
                       'kpoints': vr_slab.kpoints.as_dict()}
 
         slab_fermi = vr_slab.efermi
-        slab_cbm_vs_she = vacuum - slab_fermi - she_potential
+        slab_cbm_vs_she = vacuum - slab_fermi + she_potential
         vr_bulk = Vasprun(os.path.join(calc_locs['hse gap'], 'vasprun.xml.gz'))
         (gap, cbm, vbm, is_direct) = vr_bulk.eigenvalue_band_properties
         bulk_props = {'gap': gap, 'cbm': cbm, 'vbm': vbm, 'is_direct': is_direct,
@@ -105,6 +105,7 @@ class BandedgesToDb(FiretaskBase):
             doc.update({self.get("fw_spec_field"): fw_spec.get(self.get("fw_spec_field"))})
 
         db_file = env_chk(self.get('db_file'), fw_spec)
+        doc = jsanitize(doc)
         if not db_file:
             with open("band_edges.json", "w") as f:
                 f.write(json.dumps(doc, default=DATETIME_HANDLER))
@@ -402,7 +403,7 @@ class ElasticTensorToDb(FiretaskBase):
         d["fitting_method"] = method
         d["order"] = order
 
-        d = recursive_dict(d)
+        d = jsanitize(d)
 
         # Save analysis results in json or db
         db_file = env_chk(self.get('db_file'), fw_spec)
