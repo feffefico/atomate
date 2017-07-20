@@ -16,18 +16,20 @@ from atomate.vasp.fireworks.core import OptimizeFW, StaticFW, NonSCFFW, HSEBSFW
 from atomate.vasp.workflows.presets.core import wf_bandstructure_plus_hse
 from atomate.vasp.workflows.base.adsorption import get_slab_fw
 from atomate.vasp.firetasks.parse_outputs import BandedgesToDb
+from atomate.vasp.powerups import add_tags, add_modify_incar
 from atomate.utils.utils import get_fws_and_tasks
 
 from custodian.vasp.handlers import *
 
 from pymatgen.core.surface import generate_all_slabs
 from pymatgen.io.vasp.sets import MVLSlabSet, MPStaticSet
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 __author__ = 'Joseph Montoya, Arunima Singh'
 __email__ = 'montoyjh@lbl.gov'
 
 def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp', 
-                        db_file=None, max_index=1, min_slab_size=7.0,
+                        db_file=None, max_index=1, min_slab_size=12.0,
                         min_vacuum_size=15.0, analysis=True):
     """
     Function to return workflow designed to return HSE band edges.
@@ -41,8 +43,10 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
     sgp = {"min_slab_size": min_slab_size,
            "min_vacuum_size": min_vacuum_size}
     slabs = generate_all_slabs(structure, max_index=max_index, **sgp)
-    # Get min volume slab
-    slabs = sorted(slabs, key=lambda x: x.volume)
+    # Get min volume slab, try to get symmetric slab
+    slabs = sorted(slabs, key=lambda x: (x.volume, not x.is_symmetric(), 
+                                         len(SpacegroupAnalyzer(x).get_symmetry_operations())))
+    #import pdb; pdb.set_trace()
     slab = slabs[0]
 
     # TODO: decide whether we want to optimize slab, slab thickness, etc.
@@ -95,7 +99,6 @@ def modify_handlers(wf, handler_group, fw_name_constraint=None):
 if __name__ == "__main__":
     # Here's an example of the usage of the workflow
     from pymatgen import MPRester
-    from atomate.vasp.powerups import add_tags, add_modify_incar
     from fireworks import LaunchPad
     mpr = MPRester()
     lpad = LaunchPad.auto_load()
@@ -106,4 +109,4 @@ if __name__ == "__main__":
                                  db_file=">>db_file<<")
         wf = add_modify_incar(wf)
         wf = add_tags(wf, ["Bandedge_benchmark_1", mp_id])
-        lpad.add_wf(wf)
+        #lpad.add_wf(wf)
