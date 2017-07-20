@@ -103,6 +103,8 @@ class VaspToDb(FiretaskBase):
         else:
             defuse_children = False
 
+        if self.get("auto_restart", False) and task_doc["state"] is not "successful":
+
         return FWAction(stored_data={"task_id": task_doc.get("task_id", None)},
                         defuse_children=defuse_children)
 
