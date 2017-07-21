@@ -87,7 +87,7 @@ class RunVaspCustodian(FiretaskBase):
     required_params = ["vasp_cmd"]
     optional_params = ["job_type", "handler_group", "max_force_threshold", "scratch_dir",
                        "gzip_output", "max_errors", "ediffg", "auto_npar", "gamma_vasp_cmd",
-                       "wall_time"]
+                       "wall_time", "auto_continue"]
 
     def run_task(self, fw_spec):
 
@@ -116,12 +116,14 @@ class RunVaspCustodian(FiretaskBase):
         max_errors = self.get("max_errors", 5)
         auto_npar = env_chk(self.get("auto_npar"), fw_spec, strict=False, default=False)
         gamma_vasp_cmd = env_chk(self.get("gamma_vasp_cmd"), fw_spec, strict=False, default=None)
+        auto_continue = env_chk(self.get("auto_continue"), fw_spec, strict=False, default=False)
         if gamma_vasp_cmd:
             gamma_vasp_cmd = shlex.split(gamma_vasp_cmd)
 
         # construct jobs
         if job_type == "normal":
-            jobs = [VaspJob(vasp_cmd, auto_npar=auto_npar, gamma_vasp_cmd=gamma_vasp_cmd)]
+            jobs = [VaspJob(vasp_cmd, auto_npar=auto_npar, auto_continue=auto_continue,
+                            gamma_vasp_cmd=gamma_vasp_cmd)]
         elif job_type == "double_relaxation_run":
             jobs = VaspJob.double_relaxation_run(vasp_cmd, auto_npar=auto_npar,
                                                  ediffg=self.get("ediffg"),
@@ -129,7 +131,8 @@ class RunVaspCustodian(FiretaskBase):
         elif job_type == "full_opt_run":
             jobs = VaspJob.full_opt_run(vasp_cmd, auto_npar=auto_npar,
                                         ediffg=self.get("ediffg"),
-                                        max_steps=9, half_kpts_first_relax=False)
+                                        max_steps=9, half_kpts_first_relax=False,
+                                        auto_continue=auto_continue)
         elif job_type == "neb":
             # TODO: @shyuep @HanmeiTang This means that NEB can only be run (i) in reservation mode
             # and (ii) when the queueadapter parameter is overridden and (iii) the queue adapter
@@ -175,7 +178,7 @@ class RunVaspCustodian(FiretaskBase):
         if self.get("max_force_threshold"):
             handlers.append(MaxForceErrorHandler(max_force_threshold=self["max_force_threshold"]))
 
-        if self.get("wall_time"):
+        if self.get("wall_time") or auto_continue:
             handlers.append(WalltimeHandler(wall_time=self["wall_time"]))
 
         if job_type == "neb":

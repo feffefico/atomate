@@ -14,7 +14,7 @@ from atomate.vasp.firetasks.run_calc import RunVaspCustodian, RunVaspFake, RunVa
 from atomate.vasp.firetasks.neb_tasks import RunNEBVaspFake
 from atomate.vasp.firetasks.write_inputs import ModifyIncar
 from atomate.vasp.firetasks.parse_outputs import JsonToDb
-from atomate.vasp.config import ADD_NAMEFILE, SCRATCH_DIR, ADD_MODIFY_INCAR, GAMMA_VASP_CMD
+from atomate.vasp.config import ADD_NAMEFILE, SCRATCH_DIR, ADD_MODIFY_INCAR, GAMMA_VASP_CMD, AUTO_CONTINUE
 
 __author__ = 'Anubhav Jain, Kiran Mathew'
 __email__ = 'ajain@lbl.gov, kmathew@lbl.gov'
@@ -469,6 +469,9 @@ def add_common_powerups(wf, c):
     if c.get("GAMMA_VASP_CMD", GAMMA_VASP_CMD):
         wf = use_gamma_vasp((wf),c.get("GAMMA_VASP_CMD", GAMMA_VASP_CMD))
 
+    if c.get("AUTO_CONTINUE", AUTO_CONTINUE):
+        wf = add_auto_continue(wf, c.get("AUTO_CONTINUE"))
+
     return wf
 
 
@@ -485,4 +488,21 @@ def use_gamma_vasp(original_wf, gamma_vasp_cmd):
     """
     for idx_fw, idx_t in get_fws_and_tasks(original_wf, task_name_constraint="RunVaspCustodian"):
         original_wf.fws[idx_fw].tasks[idx_t]["gamma_vasp_cmd"] = gamma_vasp_cmd
+    return original_wf
+
+
+def add_auto_continue(original_wf, auto_continue=True, fw_name_constraint=None):
+    """
+    For all RunVaspCustodian tasks, add the desired scratch dir.
+
+    Args:
+        original_wf (Workflow)
+        gamma_vasp_cmd (str): path to gamma_vasp_cmd. Supports env_chk
+
+    Returns:
+       Workflow
+    """
+    for idx_fw, idx_t in get_fws_and_tasks(original_wf, fw_name_constraint=fw_name_constraint, 
+                                           task_name_constraint="RunVaspCustodian"):
+        original_wf.fws[idx_fw].tasks[idx_t]["auto_continue"] = auto_continue
     return original_wf
