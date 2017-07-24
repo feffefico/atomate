@@ -1,6 +1,57 @@
-====================
+=================
 atomate Changelog
-====================
+=================
+
+**v0.5.6**
+
+* major improvements to elastic tensor calculations and compatibility with latest pymatgen (J. Montoya, K. Mathew)
+
+**v0.5.5**
+
+* remove PyPI download size by an order of magnitude
+
+**v0.5.4**
+
+* re-attempt to fix packaging of YAML workflow library in pip
+
+**v0.5.3**
+
+* attempt to fix packaging of YAML workflow library in pip
+* update doc links
+
+**v0.5.2**
+
+* band gap estimation builder based on dielectric constants
+* clean up pypi packaging (S.P. Ong)
+* link to new doc links
+* misc bugfixes and workflow settings update/fixes (K. Mathew, A. Jain)
+
+**v0.5.1**
+
+* use ruamel instead of pyyaml (S.P. Ong)
+* add magnetic moment parsing of output (M.K. Horton)
+* misc cleanups, bug fixes, doc improvements (K. Matthew, S. Dwaraknath, A. Jain)
+
+**v0.5.0**
+
+.. caution:: pymatgen has updated its default kpoint scheme! Kpoint settings will change.
+
+* migration to new pymatgen and new kpoint settings
+* much improved docs (B. Bocklund, A. Jain)
+* *major* code cleanup (J. Montoya, K. Mathew, A. Jain)
+* many unit test updates (A. Faghaninia, H. Tang, S.P. Ong, A. Jain)
+* fix automated testing on pull requests (K. Mathew)
+* misc fixes
+
+
+**v0.4.5**
+
+* *extensive* code review, code cleanup, and improved code docs - with some minor name refactoring
+* new builders: dielectric, structureanalysis (currently gives dimensionality of structure)
+* rewrite powerups as in-place with cleaner syntax
+* improved installation tutorial (B. Bocklund)
+* improve/fix/reorganize some unit tests
+* bug fixes (A. Jain, H. Tang, K. Mathew, B. Bocklund)
 
 **v0.4.4**
 

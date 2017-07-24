@@ -10,10 +10,12 @@ import subprocess
 
 from pymatgen.io.lammps.utils import PackmolRunner
 from fireworks import explicit_serialize, FiretaskBase
-
+from atomate.utils.utils import get_logger
 
 __author__ = 'Kiran Mathew'
 __email__ = "kmathew@lbl.gov"
+
+logger = get_logger(__name__)
 
 
 @explicit_serialize
@@ -43,7 +45,9 @@ class RunPackmol(FiretaskBase):
                             tolerance=self.get("tolerance", 2.0), filetype=self.get("filetype", "xyz"),
                             control_params=self.get("control_params", {"nloop": 1000}),
                             output_file=self.get("output_file", "packed_mol.xyz"))
+        logger.info("Running packmol")
         pmr.run()
+        logger.info("Packmol finished running.")
 
 
 @explicit_serialize
@@ -59,11 +63,6 @@ class RunLammpsDirect(FiretaskBase):
 
     def run_task(self, fw_spec):
         lammps_cmd = self["lammps_cmd"]
-        print("Running LAMMPS using exe: {}".format(lammps_cmd))
+        logger.info("Running LAMMPS using exe: {}".format(lammps_cmd))
         return_code = subprocess.call(lammps_cmd, shell=True)
-        print("LAMMPS finished running with returncode: {}".format(return_code))
-
-
-@explicit_serialize
-class RunLammpsCustodian(FiretaskBase):
-    pass
+        logger.info("LAMMPS finished running with returncode: {}".format(return_code))

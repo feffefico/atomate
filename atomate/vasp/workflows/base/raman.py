@@ -8,11 +8,11 @@ This module defines the workflow to compute the Raman susceptibility tensor.
 
 from fireworks import Firework, Workflow
 
+from pymatgen.io.vasp.sets import MPRelaxSet
+
 from atomate.utils.utils import get_logger
 from atomate.vasp.fireworks.core import OptimizeFW, LepsFW
-from atomate.vasp.firetasks.parse_outputs import RamanSusceptibilityTensorToDbTask
-
-from pymatgen.io.vasp.sets import MPRelaxSet
+from atomate.vasp.firetasks.parse_outputs import RamanTensorToDb
 
 __author__ = 'Kiran Mathew'
 __email__ = 'kmathew@lbl.gov'
@@ -20,13 +20,14 @@ __email__ = 'kmathew@lbl.gov'
 logger = get_logger(__name__)
 
 
+# TODO: @kmathew - can symmetry reduce the number of modes? -computron
 def get_wf_raman_spectra(structure, modes=None, step_size=0.005, vasp_cmd="vasp", db_file=None):
     """
     Raman susceptibility tensor workflow:
         Calculation of phonon normal modes followed by the computation of dielectric tensor for
         structures displaced along the normal modes. Finally the dielectric tensors corresponding
-        to each mode are used to compute the Raman susceptibility tensor using finite difference(
-        central difference scheme).
+        to each mode are used to compute the Raman susceptibility tensor using finite difference 
+        (central difference scheme).
 
     Args:
         structure (Structure): Input structure.
@@ -67,16 +68,9 @@ def get_wf_raman_spectra(structure, modes=None, step_size=0.005, vasp_cmd="vasp"
     fws.extend(fws_nm_disp)
 
     # Compute the Raman susceptibility tensor
-    fw_analysis = Firework(RamanSusceptibilityTensorToDbTask(db_file=db_file), parents=fws_nm_disp,
+    fw_analysis = Firework(RamanTensorToDb(db_file=db_file), parents=fws[:],
                            name="{}-{}".format(structure.composition.reduced_formula, "raman analysis"))
     fws.append(fw_analysis)
 
     wfname = "{}:{}".format(structure.composition.reduced_formula, "raman spectra")
     return Workflow(fws, name=wfname)
-
-
-if __name__ == "__main__":
-    from pymatgen.util.testing import PymatgenTest
-
-    Si = PymatgenTest.get_structure("Si")
-    wf = get_wf_raman_spectra(Si)

@@ -8,38 +8,37 @@ from pymatgen.analysis.elasticity.strain import Strain
 from pymatgen.io.vasp import Vasprun, zpath
 
 """
-This module defines tasks that acts as a glue between other vasp firetasks
-namely passing the location of current run to the next one and copying files
-from previous run directory oto the current one.
+This module defines tasks that acts as a glue between other vasp Firetasks to allow communication
+between different Firetasks and Fireworks. This module also contains tasks that affect the control
+flow of the workflow, e.g. tasks to check stability or the gap is within a certain range.
 """
 
 import gzip
 import os
 import re
-from decimal import Decimal
-
-import numpy as np
 
 from pymatgen import MPRester
 from pymatgen.io.vasp.sets import get_vasprun_outcar
-from pymatgen.analysis.elasticity import reverse_voigt_map
 
 from fireworks import explicit_serialize, FiretaskBase, FWAction
 
-from atomate.utils.utils import get_calc_loc, env_chk
-from atomate.utils.fileio import FileClient
+from atomate.utils.utils import env_chk, get_logger
+from atomate.common.firetasks.glue_tasks import get_calc_loc, PassResult, CopyFiles
+
+logger = get_logger(__name__)
 
 __author__ = 'Anubhav Jain, Kiran Mathew'
 __email__ = 'ajain@lbl.gov, kmathew@lbl.gov'
 
 
 @explicit_serialize
-class CopyVaspOutputs(FiretaskBase):
+class CopyVaspOutputs(CopyFiles):
     """
     Copy files from a previous VASP run directory to the current directory.
-    By default, copies 'INCAR', 'POSCAR', 'KPOINTS', 'POTCAR', 'OUTCAR',
-    and 'vasprun.xml'. Additional files, e.g. 'CHGCAR', can also be specified.
-    Automatically handles files that have a ".gz" extension (copies and unzips).
+    By default, copies 'INCAR', 'POSCAR' (default: via 'CONTCAR'), 'KPOINTS', 
+    'POTCAR', 'OUTCAR', and 'vasprun.xml'. Additional files, e.g. 'CHGCAR', 
+    can also be specified. Automatically handles files that have a ".gz" 
+    extension (copies and unzips).
 
     Note that you must specify either "calc_loc" or "calc_dir" to indicate
     the directory containing the previous VASP run.
@@ -63,48 +62,41 @@ class CopyVaspOutputs(FiretaskBase):
 
     def run_task(self, fw_spec):
 
-        if self.get("calc_dir"):  # direct setting of calc dir - no calc_locs or filesystem!
-            calc_dir = self["calc_dir"]
-            filesystem = None
-        elif self.get("calc_loc"):  # search for calc dir and filesystem within calc_locs
-            calc_loc = get_calc_loc(self["calc_loc"], fw_spec["calc_locs"])
-            calc_dir = calc_loc["path"]
-            filesystem = calc_loc["filesystem"]
-        else:
-            raise ValueError("Must specify either calc_dir or calc_loc!")
-
-        fileclient = FileClient(filesystem=filesystem)
-        calc_dir = fileclient.abspath(calc_dir)
-        contcar_to_poscar = self.get("contcar_to_poscar", True)
-
-        all_files = fileclient.listdir(calc_dir)
+        calc_loc = get_calc_loc(self["calc_loc"], fw_spec["calc_locs"]) if self.get("calc_loc") else {}
 
         # determine what files need to be copied
-        if "$ALL" in self.get("additional_files", []):
-            files_to_copy = all_files
-        else:
+        files_to_copy = None
+        if not "$ALL" in self.get("additional_files", []):
             files_to_copy = ['INCAR', 'POSCAR', 'KPOINTS', 'POTCAR', 'OUTCAR', 'vasprun.xml']
-
             if self.get("additional_files"):
                 files_to_copy.extend(self["additional_files"])
 
+        # decide between poscar and contcar
+        contcar_to_poscar = self.get("contcar_to_poscar", True)
         if contcar_to_poscar and "CONTCAR" not in files_to_copy:
             files_to_copy.append("CONTCAR")
             files_to_copy = [f for f in files_to_copy if f != 'POSCAR']  # remove POSCAR
 
+        # setup the copy
+        self.setup_copy(self.get("calc_dir", None), filesystem=self.get("filesystem", None),
+                        files_to_copy=files_to_copy, from_path_dict=calc_loc)
+        # do the copying
+        self.copy_files()
+
+    def copy_files(self):
+        all_files = self.fileclient.listdir(self.from_dir)
         # start file copy
-        for f in files_to_copy:
-            prev_path_full = os.path.join(calc_dir, f)
-            # prev_path = os.path.join(os.path.split(calc_dir)[1], f)
-            dest_fname = 'POSCAR' if f == 'CONTCAR' and contcar_to_poscar else f
-            dest_path = os.path.join(os.getcwd(), dest_fname)
+        for f in self.files_to_copy:
+            prev_path_full = os.path.join(self.from_dir, f)
+            dest_fname = 'POSCAR' if f == 'CONTCAR' else f
+            dest_path = os.path.join(self.to_dir, dest_fname)
 
             relax_ext = ""
-            relax_paths = sorted(fileclient.glob(prev_path_full+".relax*"), reverse=True)
+            relax_paths = sorted(self.fileclient.glob(prev_path_full+".relax*"))
             if relax_paths:
                 if len(relax_paths) > 9:
                     raise ValueError("CopyVaspOutputs doesn't properly handle >9 relaxations!")
-                m = re.search('\.relax\d*', relax_paths[0])
+                m = re.search('\.relax\d*', relax_paths[-1])
                 relax_ext = m.group(0)
 
             # detect .gz extension if needed - note that monty zpath() did not seem useful here
@@ -118,7 +110,7 @@ class CopyVaspOutputs(FiretaskBase):
                 raise ValueError("Cannot find file: {}".format(f))
 
             # copy the file (minus the relaxation extension)
-            fileclient.copy(prev_path_full + relax_ext + gz_ext, dest_path + gz_ext)
+            self.fileclient.copy(prev_path_full + relax_ext + gz_ext, dest_path + gz_ext)
 
             # unzip the .gz if needed
             if gz_ext in ['.gz', ".GZ"]:
@@ -152,14 +144,15 @@ class CheckStability(FiretaskBase):
     optional_params = ["ehull_cutoff", "MAPI_KEY", "calc_dir"]
 
     def run_task(self, fw_spec):
-
         mpr = MPRester(env_chk(self.get("MAPI_KEY"), fw_spec))
-        vasprun, outcar = get_vasprun_outcar(self.get("calc_dir", "."), parse_dos=False, parse_eigen=False)
+        vasprun, outcar = get_vasprun_outcar(self.get("calc_dir", "."), parse_dos=False,
+                                             parse_eigen=False)
 
         my_entry = vasprun.get_computed_entry(inc_structure=False)
         stored_data = mpr.get_stability([my_entry])[0]
 
         if stored_data["e_above_hull"] > self.get("ehull_cutoff", 0.05):
+            logger.info("CheckStability: failed test!")
             return FWAction(stored_data=stored_data, exit=True, defuse_workflow=True)
 
         else:
@@ -185,110 +178,64 @@ class CheckBandgap(FiretaskBase):
     optional_params = ["min_gap", "max_gap", "vasprun_path"]
 
     def run_task(self, fw_spec):
-        vr_path = self.get("vasprun_path", "vasprun.xml")
+        vr_path = zpath(self.get("vasprun_path", "vasprun.xml"))
         min_gap = self.get("min_gap", None)
         max_gap = self.get("max_gap", None)
 
-        vr_path = zpath(vr_path)
-
         if not os.path.exists(vr_path):
-            relax_paths = sorted(glob.glob(vr_path + ".relax*"), reverse=True)
+            relax_paths = sorted(glob.glob(vr_path + ".relax*"))
             if relax_paths:
                 if len(relax_paths) > 9:
                     raise ValueError("CheckBandgap doesn't properly handle >9 relaxations!")
-                vr_path = relax_paths[0]
+                vr_path = relax_paths[-1]
 
-        print("Checking the gap of file: {}".format(vr_path))
+        logger.info("Checking the gap of file: {}".format(vr_path))
         vr = Vasprun(vr_path)
         gap = vr.get_band_structure().get_band_gap()["energy"]
         stored_data = {"band_gap": gap}
-        print("The gap is: {}. Min gap: {}. Max gap: {}".format(gap, min_gap, max_gap))
+        logger.info("The gap is: {}. Min gap: {}. Max gap: {}".format(gap, min_gap, max_gap))
 
-        if min_gap and gap < min_gap or max_gap and gap > max_gap:
-            print("Defusing based on band gap!")
+        if (min_gap and gap < min_gap) or (max_gap and gap > max_gap):
+            logger.info("CheckBandgap: failed test!")
             return FWAction(stored_data=stored_data, exit=True, defuse_workflow=True)
 
-        print("Gap OK...")
         return FWAction(stored_data=stored_data)
 
 
-@explicit_serialize
-class PassStressStrainData(FiretaskBase):
+def pass_vasp_result(pass_dict, calc_dir='.', filename="vasprun.xml.gz", parse_eigen=False,
+                     parse_dos=False, **kwargs):
     """
-    Passes the stress and deformation for an elastic deformation calculation
+    Function that gets a PassResult firework corresponding to output from a Vasprun.  Covers
+    most use cases in which user needs to pass results from a vasp run to child FWs
+    (e. g. analysis FWs)
+        
+    pass_vasp_result(pass_dict={'stress': ">>ionic_steps.-1.stress"})
 
     Required params:
-        deformation: the deformation gradient used in the elastic analysis.
+        pass_dict (dict): dictionary designating keys and values to pass
+            to child fireworks.  If value is a string beginning with '>>',
+            the firework will search the parsed VASP output dictionary
+            for the designated property by following the sequence of keys
+            separated with periods, e. g. ">>ionic_steps.-1.stress" is used
+            to designate the stress from the last ionic_step. If the value
+            is not a string or does not begin with ">>" or "a>>" (for an
+            object attribute, rather than nested key of .as_dict() conversion),
+            it is passed as is.
+
+    Optional params:
+        calc_dir (str): path to dir that contains VASP output files, defaults
+            to '.', e. g. current directory
+        filename (str): filename for vasp xml file to parse, defaults to
+            "vasprun.xml.gz"
+        parse_eigen (bool): flag on whether or not to parse eigenvalues,
+            defaults to false
+        parse_eigen (bool): flag on whether or not to parse dos,
+            defaults to false
+        **kwargs (keyword args): other keyword arguments passed to PassResult
+            e.g. mod_spec_key or mod_spec_cmd
+        
     """
 
-    required_params = ["deformation"]
-
-    def run_task(self, fw_spec):
-        v, _ = get_vasprun_outcar(self.get("calc_dir", "."), parse_dos=False, parse_eigen=False)
-        stress = v.ionic_steps[-1]['stress']
-        defo = self['deformation']
-        d_ind = np.nonzero(defo - np.eye(3))
-        delta = Decimal((defo - np.eye(3))[d_ind][0])
-        # Shorthand is d_X_V, X is voigt index, V is value
-        dtype = "_".join(["d", str(reverse_voigt_map[d_ind][0]),
-                          "{:.0e}".format(delta)])
-        strain = Strain.from_deformation(defo)
-        defo_dict = {'deformation_matrix': defo,
-                     'strain': strain.tolist(),
-                     'stress': stress}
-
-        return FWAction(mod_spec=[{'_set': {
-            'deformation_tasks->{}'.format(dtype): defo_dict}}])
-
-
-@explicit_serialize
-class PassEpsilonTask(FiretaskBase):
-    """
-    Pass the epsilon(dielectric constant) corresponding to the given normal mode and displacement.
-
-    Required params:
-        mode (int): normal mode index
-        displacement (float): displacement along the normal mode in Angstroms
-    """
-
-    required_params = ["mode", "displacement"]
-
-    def run_task(self, fw_spec):
-        vrun, _ = get_vasprun_outcar(self.get("calc_dir", "."), parse_dos=False, parse_eigen=True)
-        epsilon_static = vrun.epsilon_static
-        epsilon_dict = {"mode": self["mode"],
-                        "displacement": self["displacement"],
-                        "epsilon": epsilon_static}
-        return FWAction(mod_spec=[{
-            '_set': {
-                'raman_epsilon->{}_{}'.format(
-                    str(self["mode"]),
-                    str(self["displacement"]).replace("-", "m").replace(".", "d")): epsilon_dict
-            }
-        }])
-
-
-@explicit_serialize
-class PassNormalmodesTask(FiretaskBase):
-    """
-    Extract and pass the normal mode eigenvalues and vectors.
-
-    optional_params:
-        calc_dir (str): path to the calculation directory
-    """
-
-    optional_params = ["calc_dir"]
-
-    def run_task(self, fw_spec):
-        normalmode_dict = fw_spec.get("normalmodes", None)
-        if not normalmode_dict:
-            vrun, _ = get_vasprun_outcar(self.get("calc_dir", "."), parse_dos=False, parse_eigen=True)
-            structure = vrun.final_structure.copy()
-            normalmode_eigenvals = vrun.normalmode_eigenvals
-            normalmode_eigenvecs = vrun.normalmode_eigenvecs
-            normalmode_norms = np.linalg.norm(normalmode_eigenvecs, axis=2)
-            normalmode_dict = {"structure": structure,
-                               "eigenvals": normalmode_eigenvals.tolist(),
-                               "eigenvecs": normalmode_eigenvecs.tolist(),
-                               "norms": normalmode_norms.tolist()}
-        return FWAction(mod_spec=[{'_set': {'normalmodes': normalmode_dict}}])
+    parse_kwargs = {"filename": filename, "parse_eigen": parse_eigen, "parse_dos":parse_dos}
+    return PassResult(pass_dict=pass_dict, calc_dir=calc_dir, parse_kwargs=parse_kwargs,
+                      parse_class="pymatgen.io.vasp.outputs.Vasprun", **kwargs)
