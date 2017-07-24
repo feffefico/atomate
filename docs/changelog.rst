@@ -2,6 +2,23 @@
 atomate Changelog
 =================
 
+**v0.5.6**
+
+* major improvements to elastic tensor calculations and compatibility with latest pymatgen (J. Montoya, K. Mathew)
+
+**v0.5.5**
+
+* remove PyPI download size by an order of magnitude
+
+**v0.5.4**
+
+* re-attempt to fix packaging of YAML workflow library in pip
+
+**v0.5.3**
+
+* attempt to fix packaging of YAML workflow library in pip
+* update doc links
+
 **v0.5.2**
 
 * band gap estimation builder based on dielectric constants

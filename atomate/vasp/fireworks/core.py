@@ -130,7 +130,8 @@ class HSEBSFW(Firework):
 
         t = []
         t.append(CopyVaspOutputs(calc_loc=True, additional_files=["CHGCAR"]))
-        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode))
+        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode, 
+                                        kpoints_line_density=kpoints_line_density))
         t.append(RunVaspCustodian(vasp_cmd=vasp_cmd))
         t.append(PassCalcLocs(name=name))
         t.append(VaspToDb(db_file=db_file, additional_fields={"task_label": name}))
@@ -297,7 +298,7 @@ class SOCFW(Firework):
 class TransmuterFW(Firework):
     def __init__(self, structure, transformations, transformation_params=None, vasp_input_set=None,
                  name="structure transmuter", vasp_cmd="vasp", copy_vasp_outputs=True, db_file=None,
-                 parents=None, override_default_vasp_params={}, **kwargs):
+                 parents=None, override_default_vasp_params=None, **kwargs):
         """
         Apply the transformations to the input structure, write the input set corresponding
         to the transformed structure, and run vasp on them.  Note that if a transformation yields 
@@ -320,6 +321,7 @@ class TransmuterFW(Firework):
             override_default_vasp_params (dict): additional user input settings for vasp_input_set.
             \*\*kwargs: Other kwargs that are passed to Firework.__init__.
         """
+        override_default_vasp_params = override_default_vasp_params or {}
         t = []
 
         vasp_input_set = vasp_input_set or MPStaticSet(structure, force_gamma=True,
