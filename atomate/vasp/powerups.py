@@ -470,7 +470,7 @@ def add_common_powerups(wf, c):
         wf = use_gamma_vasp((wf),c.get("GAMMA_VASP_CMD", GAMMA_VASP_CMD))
 
     if c.get("AUTO_CONTINUE", AUTO_CONTINUE):
-        wf = add_auto_continue(wf, c.get("AUTO_CONTINUE"))
+        wf = add_auto_continue(wf, c.get("AUTO_CONTINUE", AUTO_CONTINUE))
 
     return wf
 

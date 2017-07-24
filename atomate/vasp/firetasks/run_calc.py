@@ -126,7 +126,7 @@ class RunVaspCustodian(FiretaskBase):
                             gamma_vasp_cmd=gamma_vasp_cmd)]
         elif job_type == "double_relaxation_run":
             jobs = VaspJob.double_relaxation_run(vasp_cmd, auto_npar=auto_npar,
-                                                 ediffg=self.get("ediffg"),
+                                                 ediffg=self.get("ediffg"), auto_continue=False,
                                                  half_kpts_first_relax=False)
         elif job_type == "full_opt_run":
             jobs = VaspJob.full_opt_run(vasp_cmd, auto_npar=auto_npar,
@@ -179,7 +179,7 @@ class RunVaspCustodian(FiretaskBase):
             handlers.append(MaxForceErrorHandler(max_force_threshold=self["max_force_threshold"]))
 
         if self.get("wall_time") or auto_continue:
-            handlers.append(WalltimeHandler(wall_time=self["wall_time"]))
+            handlers.append(WalltimeHandler(wall_time=self.get("wall_time"), auto_continue=auto_continue))
 
         if job_type == "neb":
             validators = []  # CINEB vasprun.xml sometimes incomplete, file structure different
