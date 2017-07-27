@@ -15,7 +15,7 @@ from monty.serialization import loadfn
 from fireworks import LaunchPad
 
 from atomate.utils.utils import get_wf_from_spec_dict
-from atomate.vasp.powerups import add_namefile, add_tags
+from atomate.vasp.powerups import add_namefile, add_tags, add_common_powerups
 from atomate.vasp.workflows.presets import core
 
 from pymatgen import Structure, Lattice, MPRester

@@ -506,3 +506,14 @@ def add_auto_continue(original_wf, auto_continue=True, fw_name_constraint=None):
                                            task_name_constraint="RunVaspCustodian"):
         original_wf.fws[idx_fw].tasks[idx_t]["auto_continue"] = auto_continue
     return original_wf
+
+
+def modify_handlers(wf, handler_group, fw_name_constraint=None):
+    """
+    Modifies custodian handlers, to allow
+    for testing of different combinations
+    """
+    for idx_fw, idx_t in get_fws_and_tasks(wf, fw_name_constraint=fw_name_constraint,
+                                           task_name_constraint="Custodian"):
+        wf.fws[idx_fw].tasks[idx_t]['handler_group'] = handler_group
+    return wf
