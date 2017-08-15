@@ -51,8 +51,7 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
 
     # TODO: decide whether we want to optimize slab, slab thickness, etc.
     # Since these are semiconductors, shouldn't need as much k-point density
-    kpoints = MVLSlabSet(slab, k_product=30).kpoints 
-    vis = MPStaticSet(slab, user_kpoints_settings=kpoints)
+    vis = MVLSlabSet(slab, k_product=30)
     cparams = {"vasp_cmd": vasp_cmd, "db_file": db_file}
     slab_fws = [get_slab_fw(slab, bulk_structure=structure, vasp_input_set=vis,
                             slab_gen_params=sgp, name="slab", **cparams)]
@@ -72,7 +71,7 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
 
     # Turn on LVTOT in relevant FWs
     wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"LVTOT": True}},
-                          fw_name_constraint="slab_hse")
+                          fw_name_constraint="slab")
 
     # Modify handlers (TODO: make a preset handler_group)
     # This is so that the slab fws don't exit on IBZKPT errors

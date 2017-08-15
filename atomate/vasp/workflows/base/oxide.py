@@ -166,7 +166,8 @@ def get_termination(slab, start=0.2):
         surf = [site.species_string for site in asf.surface_sites]
     return Structure.from_sites(asf.surface_sites).composition.reduced_formula
 
-def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0):
+def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0,
+                                direction='top'):
     """
     This method checks whether or not the two surfaces of the slab are
     equivalent. If the point group of the slab has an inversion symmetry (
@@ -187,6 +188,13 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     """
     laue = ["-1", "2/m", "mmm", "4/m", "4/mmm",
             "-3", "-3m", "6/m", "6/mmm", "m-3", "m-3m"]
+    if direction=='top':
+        index_fn = np.argmax
+    elif direction=='bottom':
+        index_fn = np.argmin
+    else:
+        raise ValueError('direction must be top or bottom')
+
     # TODO: this might rely on having a centered slab
     slab_old = slab.copy()
     slab = slab.copy()
@@ -204,8 +212,7 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
             # surfaces are symmetric or the number of sites removed has
             # exceeded 10 percent of the original slab
 
-            site = AdsorbateSiteFinder(temp_slab, height=0).surface_sites[0]
-            index = find_in_coord_list(slab.cart_coords, site.coords)
+            index = index_fn(slab.frac_coords[:, 2])
             removed_sites.append(slab.pop(index))
 
             # Check if the altered surface is symmetric
@@ -231,6 +238,16 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     if recenter:
         slab.translate_sites(list(range(len(slab))), [0, 0, 0.5 - np.average(slab.frac_coords[:, 2])])
 
+    if restoich:
+        # copy in smallest direction
+        if slab.lattice.a > slab.lattice.b:
+            slab.make_supercell([1, 2, 1])
+        else:
+            slab.make_supercell([2, 1, 1])
+        indices = range(slab.num_sites - 2*removed_sites, slab.num_sites)
+        slab.remove_sites(indices=indices)
+        assert slab_old.composition == slab.composition, "Restoich failed"
+
     if sd_height:
         mvec = AdsorbateSiteFinder(slab).mvec
         projs = [np.dot(coord, mvec) for coord in slab.cart_coords]
@@ -242,6 +259,23 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     return slab
 
 
+def decorate_bulk_coord(structure, radius=2.5):
+    """
+    Assigns bulk coordination dictionary that can help
+    identify undercoordinated sites and their missing
+    coordinated atoms
+    """
+    # TODO: figure out sensible radius 
+    # TODO: referencing, rotations?
+    neighbor_sets = structure.get_all_neighbors(r=radius)
+    props = []
+    for n, neighbor_set in enumerate(neighbor_sets):
+        sites_by_species = groupby(neighbor_set, lambda x: x[0].species_string)
+        props.append({k: [site[0].coords - structure[n].coords for site in g]
+                      for k, g in sites_by_species})
+    new_struct = structure.copy()
+    new_struct.add_site_property("bulk_neighbors", props)
+    return new_struct
 
 
 @explicit_serialize
