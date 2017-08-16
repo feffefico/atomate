@@ -24,9 +24,14 @@ from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen import Structure, Lattice, Molecule
 from pymatgen.entries.computed_entries import ComputedEntry
 
+from custodian.vasp.handlers import *
+
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
 
+# Slab handlers doesn't include positive energy and changes
+SLAB_HANDLERS = [VaspErrorHandler(), UnconvergedErrorHandler(), FrozenJobErrorHandler(),
+                 NonConvergingErrorHandler(change_algo=True, nionic_steps=3), StdErrHandler()]
 
 def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vasp_input_set=None,
                 copy_vasp_outputs=False, vasp_cmd="vasp", name="", **kwargs):

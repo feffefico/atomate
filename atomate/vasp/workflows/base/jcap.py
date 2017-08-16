@@ -14,12 +14,11 @@ from fireworks import FiretaskBase, FWAction, explicit_serialize
 
 from atomate.vasp.fireworks.core import OptimizeFW, StaticFW, NonSCFFW, HSEBSFW
 from atomate.vasp.workflows.presets.core import wf_bandstructure_plus_hse
-from atomate.vasp.workflows.base.adsorption import get_slab_fw
+from atomate.vasp.workflows.base.adsorption import get_slab_fw, slab_handlers
 from atomate.vasp.firetasks.parse_outputs import BandedgesToDb
-from atomate.vasp.powerups import add_tags, add_modify_incar
+from atomate.vasp.powerups import add_tags, add_modify_incar, modify_handlers
 from atomate.utils.utils import get_fws_and_tasks
 
-from custodian.vasp.handlers import *
 
 from pymatgen.core.surface import generate_all_slabs
 from pymatgen.io.vasp.sets import MVLSlabSet, MPStaticSet
@@ -75,23 +74,8 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
 
     # Modify handlers (TODO: make a preset handler_group)
     # This is so that the slab fws don't exit on IBZKPT errors
-    slab_handlers = [VaspErrorHandler(), UnconvergedErrorHandler(),
-                     NonConvergingErrorHandler(), PotimErrorHandler(),
-                     PositiveEnergyErrorHandler(), FrozenJobErrorHandler(),
-                     StdErrHandler()]
     wf = modify_handlers(wf, slab_handlers, fw_name_constraint='slab')
 
-    return wf
-
-
-def modify_handlers(wf, handler_group, fw_name_constraint=None):
-    """
-    Modifies custodian handlers, to allow
-    for testing of different combinations
-    """
-    for idx_fw, idx_t in get_fws_and_tasks(wf, fw_name_constraint=fw_name_constraint,
-                                           task_name_constraint="Custodian"):
-        wf.fws[idx_fw].tasks[idx_t]['handler_group'] = handler_group
     return wf
 
 

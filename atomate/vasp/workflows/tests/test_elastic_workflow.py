@@ -6,6 +6,7 @@ import os
 import unittest
 
 import numpy as np
+
 from monty.serialization import loadfn
 
 from fireworks import FWorker, Firework, Workflow
@@ -13,14 +14,12 @@ from fireworks.core.rocket_launcher import rapidfire
 
 from atomate.vasp.powerups import use_fake_vasp, add_modify_incar
 from atomate.vasp.workflows.base.elastic import get_wf_elastic_constant
-from atomate.vasp.workflows.presets.core import wf_elastic_constant,\
-        wf_elastic_constant_minimal, get_wf
+from atomate.vasp.workflows.presets.core import wf_elastic_constant, wf_elastic_constant_minimal, get_wf
 from atomate.vasp.firetasks.parse_outputs import ElasticTensorToDb
 from atomate.utils.testing import AtomateTest
 
 from pymatgen.util.testing import PymatgenTest
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.io.vasp.sets import MPRelaxSet
 from pymatgen import Structure
 
 __author__ = 'Kiran Mathew, Joseph Montoya'
@@ -93,7 +92,7 @@ class TestElasticWorkflow(AtomateTest):
         if mode not in ["structure optimization", "elastic deformation 0",
                         "elastic deformation 3", "elastic analysis", "toec analysis"]:
             raise ValueError("Invalid mode!")
-        
+
         if mode not in ["elastic analysis", "toec analysis"]:
             self.assertEqual(d["formula_pretty"], "Si")
             self.assertEqual(d["formula_anonymous"], "A")
@@ -162,9 +161,10 @@ class TestElasticWorkflow(AtomateTest):
         
         d = self.get_task_collection().find_one({"task_label": "elastic deformation 3"})
         self._check_run(d, mode="elastic deformation 3")
-        
+
         # check the final results
-        d = self.get_task_collection(coll_name="elasticity").find_one({'order': 2})
+        d = self.get_task_collection(coll_name="elasticity").find_one(
+                {'order': 2, "optimized_structure": {"$exists":True}})
         self._check_run(d, mode="elastic analysis")
 
         # check third-order results

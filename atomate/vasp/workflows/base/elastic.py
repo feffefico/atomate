@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 """
 This module defines the elastic workflow
 """
-import itertools
+
 import numpy as np
 
 from pymatgen.analysis.elasticity.strain import Deformation, Strain
@@ -27,10 +27,9 @@ __email__ = 'shyamd@lbl.gov, montoyjh@lbl.gov'
 logger = get_logger(__name__)
 
 
-def get_wf_elastic_constant(structure, strain_states=None, stencils=None,
-                            db_file=None, conventional=False, order=2, 
-                            vasp_input_set=None, analysis=True, sym_reduce=False,
-                            tag='elastic', copy_vasp_outputs=False, **kwargs):
+def get_wf_elastic_constant(structure, strain_states=None, stencils=None, db_file=None,
+                            conventional=False, order=2, vasp_input_set=None, analysis=True,
+                            sym_reduce=False, tag='elastic', copy_vasp_outputs=False, **kwargs):
     """
     Returns a workflow to calculate elastic constants.
 
@@ -62,6 +61,9 @@ def get_wf_elastic_constant(structure, strain_states=None, stencils=None,
             for each vasp run.
         analysis (bool): flag to indicate whether analysis task should be added
             and stresses and strains passed to that task
+        sym_reduce (bool): Whether or not to apply symmetry reductions
+        tag (str):
+        copy_vasp_outputs (bool): whether or not to copy previous vasp outputs.
         kwargs (keyword arguments): additional kwargs to be passed to get_wf_deformations
 
     Returns:
@@ -71,7 +73,7 @@ def get_wf_elastic_constant(structure, strain_states=None, stencils=None,
     if conventional:
         structure = SpacegroupAnalyzer(structure).get_conventional_standard_structure()
 
-    uis_elastic = {"IBRION": 2, "NSW": 99, "ISIF": 2, "ISTART": 1}
+    uis_elastic = {"IBRION": 2, "NSW": 99, "ISIF": 2, "ISTART": 1, "PREC": "High"}
     vis = vasp_input_set or MPStaticSet(structure, user_incar_settings=uis_elastic)
     strains = []
     if strain_states is None:
@@ -122,6 +124,7 @@ def get_wf_elastic_constant(structure, strain_states=None, stencils=None,
 
     return wf_elastic
 
+
 def get_default_strain_states(order=2):
     """
     Generates a list of "strain-states"
@@ -130,25 +133,9 @@ def get_default_strain_states(order=2):
     if order > 2:
         inds.extend([(0, i) for i in range(1, 5)] + [(1,2), (3,4), (3,5), (4,5)])
         if order > 3:
-            raise ValueError("Standard deformations for tensors higher "
-                             "than rank 4 not yet determined")
+            raise ValueError("Standard deformations for tensors higher than rank 4 not yet determined")
     strain_states = np.zeros((len(inds), 6))
     for n, i in enumerate(inds):
         np.put(strain_states[n], i, 1)
     strain_states[:, 3:] *= 2
     return strain_states.tolist()
-
-
-if __name__ == "__main__":
-    from pymatgen.util.testing import PymatgenTest
-
-    structure = PymatgenTest.get_structure("Si")
-    #wf = get_wf_elastic_constant(structure)
-    try:
-        wf = get_wf_elastic_constant(structure, sym_reduce=True)
-        wf2 = get_wf_elastic_constant(structure, order=3, sym_reduce=False)
-    except:
-        import sys, pdb, traceback
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        pdb.post_mortem(tb)

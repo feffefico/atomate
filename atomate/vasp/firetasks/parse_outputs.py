@@ -4,7 +4,6 @@ from __future__ import division, print_function, unicode_literals, absolute_impo
 
 import json
 import os
-import itertools
 from collections import defaultdict
 from datetime import datetime
 
@@ -13,11 +12,10 @@ import numpy as np
 from monty.json import MontyEncoder, jsanitize
 
 from fireworks import FiretaskBase, FWAction, explicit_serialize
-from fireworks.utilities.fw_serializers import DATETIME_HANDLER, recursive_dict
+from fireworks.utilities.fw_serializers import DATETIME_HANDLER
 
 from pymatgen import Structure
-from pymatgen.analysis.elasticity.elastic import ElasticTensor, \
-        ElasticTensorExpansion, get_strain_state_dict
+from pymatgen.analysis.elasticity.elastic import ElasticTensor, ElasticTensorExpansion
 from pymatgen.analysis.elasticity.strain import Strain, Deformation
 from pymatgen.analysis.elasticity.stress import Stress
 from pymatgen.analysis.reaction_calculator import ComputedReaction
@@ -326,11 +324,13 @@ class ElasticTensorToDb(FiretaskBase):
 
     def run_task(self, fw_spec):
         ref_struct = self['structure']
-        d = {"analysis": {}, "initial_structure": self['structure'].as_dict()}
+        d = {
+            "analysis": {},
+            "initial_structure": self['structure'].as_dict()
+        }
 
         # Get optimized structure
-        calc_locs_opt = [cl for cl in fw_spec.get('calc_locs', [])
-                         if 'optimiz' in cl['name']]
+        calc_locs_opt = [cl for cl in fw_spec.get('calc_locs', []) if 'optimiz' in cl['name']]
         if calc_locs_opt:
             optimize_loc = calc_locs_opt[-1]['path']
             logger.info("Parsing initial optimization directory: {}".format(optimize_loc))
@@ -339,8 +339,7 @@ class ElasticTensorToDb(FiretaskBase):
             opt_struct = Structure.from_dict(optimize_doc["calcs_reversed"][0]["output"]["structure"])
             d.update({"optimized_structure": opt_struct.as_dict()})
             ref_struct = opt_struct
-            eq_stress = -0.1*Stress(optimize_doc["calcs_reversed"][0]\
-                                         ["output"]["ionic_steps"][-1]["stress"])
+            eq_stress = -0.1*Stress(optimize_doc["calcs_reversed"][0]["output"]["ionic_steps"][-1]["stress"])
         else:
             eq_stress = None
 
@@ -364,9 +363,12 @@ class ElasticTensorToDb(FiretaskBase):
         pk_stresses = [stress.piola_kirchoff_2(deformation)
                        for stress, deformation in zip(stresses, deformations)]
 
-        d['fitting_data'] = {'cauchy_stresses': stresses, 'eq_stress': eq_stress,
-                             'strains': strains, 'pk_stresses': pk_stresses,
-                             'deformations': deformations}
+        d['fitting_data'] = {'cauchy_stresses': stresses,
+                             'eq_stress': eq_stress,
+                             'strains': strains,
+                             'pk_stresses': pk_stresses,
+                             'deformations': deformations
+                             }
 
         logger.info("Analyzing stress/strain data")
         # TODO: @montoyjh: what if it's a cubic system? don't need 6. -computron
@@ -386,13 +388,18 @@ class ElasticTensorToDb(FiretaskBase):
         elif method == 'pseudoinverse':
             result = ElasticTensor.from_pseudoinverse(strains, pk_stresses)
         elif method == 'independent':
-            result = ElasticTensor.from_independent_strains(
-                    strains, pk_stresses, eq_stress=eq_stress)
+            result = ElasticTensor.from_independent_strains(strains, pk_stresses, eq_stress=eq_stress)
         else:
             raise ValueError("Unsupported method, method must be finite_difference, "
                              "pseudoinverse, or independent")
+
         ieee = result.convert_to_ieee(ref_struct)
-        d.update({"elastic_tensor": {"raw": result.voigt, "ieee_format": ieee.voigt}})
+        d.update({
+            "elastic_tensor": {
+                "raw": result.voigt,
+                "ieee_format": ieee.voigt
+            }
+        })
         if order == 2:
             d.update({"derived_properties": ieee.get_structure_property_dict(ref_struct)})
         else:
