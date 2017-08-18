@@ -21,7 +21,7 @@ __email__ = 'ajain@lbl.gov, kmathew@lbl.gov'
 module_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 
 
-class TestWriteVasp(PymatgenTest, AtomateTest):
+class TestWriteVasp(AtomateTest):
     @classmethod
     def setUpClass(cls):
         cls.struct_si = PymatgenTest.get_structure("Si")
@@ -40,6 +40,9 @@ class TestWriteVasp(PymatgenTest, AtomateTest):
         cls.ref_incar_preserve = Incar.from_file(os.path.join(module_dir,
                                                               "..", "..", "test_files",
                                                               "preserve_incar", "INCAR"))
+
+    def setUp(self):
+        super(TestWriteVasp, self).setUp(lpad=False)
 
     def tearDown(self):
         for x in ["INCAR", "POSCAR", "POTCAR", "KPOINTS"]:
@@ -60,7 +63,8 @@ class TestWriteVasp(PymatgenTest, AtomateTest):
                              self.ref_incar_preserve)
 
     def test_ioset_explicit(self):
-        ft = WriteVaspFromIOSet(dict(structure=self.struct_si, vasp_input_set=MPRelaxSet(self.struct_si, force_gamma=True)))
+        ft = WriteVaspFromIOSet(dict(structure=self.struct_si, 
+            vasp_input_set=MPRelaxSet(self.struct_si, force_gamma=True)))
         ft = load_object(ft.to_dict())  # simulate database insertion
         ft.run_task({})
         self._verify_files()

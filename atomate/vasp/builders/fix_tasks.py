@@ -25,11 +25,19 @@ class FixTasksBuilder(AbstractBuilder):
     def run(self):
         # change spacegroup numbers from string to integer where needed
         logger.info("FixTasksBuilder started.")
-        for t in self._tasks.find({"output.spacegroup.number": {"$type": 2}}, {"task_id": 1, "output": 1}):
+        for t in self._tasks.find({"output.spacegroup.number": {"$type": 2}},
+                                  {"task_id": 1, "output": 1}):
             logger.info("Fixing string spacegroup, tid: {}".format(t["task_id"]))
             sg = int(t["output"]["spacegroup"]["number"])
             self._tasks.update_one({"task_id": t["task_id"]},
                                    {"$set": {"output.spacegroup.number": sg}})
+
+        # change tags from string to list where needed
+        for t in self._tasks.find({"tags": {"$exists": True}, "tags.0": {"$exists": False}}, {"task_id": 1, "tags": 1}):
+            logger.info("Fixing tag (converting to list), tid: {}".format(t["task_id"]))
+            self._tasks.update_one({"task_id": t["task_id"]},
+                                   {"$set": {"tags": [t["tags"]]}})
+
         logger.info("FixTasksBuilder finished.")
 
     def reset(self):
