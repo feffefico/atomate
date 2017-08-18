@@ -179,7 +179,7 @@ class RunVaspCustodian(FiretaskBase):
             handlers.append(MaxForceErrorHandler(max_force_threshold=self["max_force_threshold"]))
 
         if self.get("wall_time"):
-            handlers.append(WalltimeHandler(wall_time=self["wall_time"]))
+            handlers.append(WalltimeHandler(wall_time=self.get("wall_time")))
 
         if job_type == "neb":
             validators = []  # CINEB vasprun.xml sometimes incomplete, file structure different
