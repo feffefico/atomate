@@ -171,6 +171,8 @@
 </li>
       <li><a href="atomate.vasp.html#atomate.vasp.powerups.add_modify_incar_envchk">add_modify_incar_envchk() (in module atomate.vasp.powerups)</a>
 </li>
+      <li><a href="atomate.vasp.html#atomate.vasp.powerups.add_modify_potcar">add_modify_potcar() (in module atomate.vasp.powerups)</a>
+</li>
       <li><a href="atomate.vasp.html#atomate.vasp.powerups.add_namefile">add_namefile() (in module atomate.vasp.powerups)</a>
 </li>
       <li><a href="atomate.vasp.html#atomate.vasp.powerups.add_priority">add_priority() (in module atomate.vasp.powerups)</a>
@@ -333,6 +335,10 @@
 </li>
       <li><a href="atomate.vasp.builders.html#module-atomate.vasp.builders.dielectric">atomate.vasp.builders.dielectric (module)</a>
 </li>
+      <li><a href="atomate.vasp.builders.examples.html#module-atomate.vasp.builders.examples">atomate.vasp.builders.examples (module)</a>
+</li>
+      <li><a href="atomate.vasp.builders.examples.html#module-atomate.vasp.builders.examples.run_builders">atomate.vasp.builders.examples.run_builders (module)</a>
+</li>
       <li><a href="atomate.vasp.builders.html#module-atomate.vasp.builders.file_materials">atomate.vasp.builders.file_materials (module)</a>
 </li>
       <li><a href="atomate.vasp.builders.html#module-atomate.vasp.builders.fix_tasks">atomate.vasp.builders.fix_tasks (module)</a>
@@ -345,15 +351,13 @@
 </li>
       <li><a href="atomate.vasp.builders.html#module-atomate.vasp.builders.tasks_materials">atomate.vasp.builders.tasks_materials (module)</a>
 </li>
+      <li><a href="atomate.vasp.builders.html#module-atomate.vasp.builders.utils">atomate.vasp.builders.utils (module)</a>
+</li>
       <li><a href="atomate.vasp.html#module-atomate.vasp.config">atomate.vasp.config (module)</a>
 </li>
       <li><a href="atomate.vasp.html#module-atomate.vasp.database">atomate.vasp.database (module)</a>
 </li>
       <li><a href="atomate.vasp.html#module-atomate.vasp.drones">atomate.vasp.drones (module)</a>
-</li>
-      <li><a href="atomate.vasp.examples.html#module-atomate.vasp.examples">atomate.vasp.examples (module)</a>
-</li>
-      <li><a href="atomate.vasp.examples.html#module-atomate.vasp.examples.builders_example">atomate.vasp.examples.builders_example (module)</a>
 </li>
       <li><a href="atomate.vasp.firetasks.html#module-atomate.vasp.firetasks">atomate.vasp.firetasks (module)</a>
 </li>
@@ -499,6 +503,12 @@
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.utils.dbid_to_int">dbid_to_int() (in module atomate.vasp.builders.utils)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.utils.dbid_to_str">dbid_to_str() (in module atomate.vasp.builders.utils)</a>
+</li>
       <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.dielectric.DielectricBuilder">DielectricBuilder (class in atomate.vasp.builders.dielectric)</a>
 </li>
   </ul></td>
@@ -775,11 +785,13 @@
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder.mid_to_str">mid_to_str() (atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder method)</a>
-</li>
       <li><a href="atomate.vasp.html#atomate.vasp.powerups.modify_to_soc">modify_to_soc() (in module atomate.vasp.powerups)</a>
 </li>
       <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyIncar">ModifyIncar (class in atomate.vasp.firetasks.write_inputs)</a>
+</li>
+      <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyPotcar">ModifyPotcar (class in atomate.vasp.firetasks.write_inputs)</a>
+</li>
+      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.tasks_materials.module_dir">module_dir (in module atomate.vasp.builders.tasks_materials)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -878,6 +890,8 @@
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyIncar.optional_params">(atomate.vasp.firetasks.write_inputs.ModifyIncar attribute)</a>
 </li>
+        <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyPotcar.optional_params">(atomate.vasp.firetasks.write_inputs.ModifyPotcar attribute)</a>
+</li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.WriteTransmutedStructureIOSet.optional_params">(atomate.vasp.firetasks.write_inputs.WriteTransmutedStructureIOSet attribute)</a>
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.WriteVaspFromIOSet.optional_params">(atomate.vasp.firetasks.write_inputs.WriteVaspFromIOSet attribute)</a>
@@ -917,6 +931,8 @@
         <li><a href="atomate.vasp.html#atomate.vasp.drones.VaspDrone.post_process">(atomate.vasp.drones.VaspDrone method)</a>
 </li>
       </ul></li>
+      <li><a href="atomate.vasp.html#atomate.vasp.drones.VaspDrone.process_raw_data">process_raw_data() (atomate.vasp.drones.VaspDrone method)</a>
+</li>
       <li><a href="atomate.vasp.html#atomate.vasp.drones.VaspDrone.process_vasprun">process_vasprun() (atomate.vasp.drones.VaspDrone method)</a>
 </li>
   </ul></td>
@@ -991,6 +1007,8 @@
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.run_calc.RunVaspDirect.required_params">(atomate.vasp.firetasks.run_calc.RunVaspDirect attribute)</a>
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.run_calc.RunVaspFake.required_params">(atomate.vasp.firetasks.run_calc.RunVaspFake attribute)</a>
+</li>
+        <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyPotcar.required_params">(atomate.vasp.firetasks.write_inputs.ModifyPotcar attribute)</a>
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.WriteNormalmodeDisplacedPoscar.required_params">(atomate.vasp.firetasks.write_inputs.WriteNormalmodeDisplacedPoscar attribute)</a>
 </li>
@@ -1145,6 +1163,8 @@
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.run_calc.RunVaspFake.run_task">(atomate.vasp.firetasks.run_calc.RunVaspFake method)</a>
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyIncar.run_task">(atomate.vasp.firetasks.write_inputs.ModifyIncar method)</a>
+</li>
+        <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.ModifyPotcar.run_task">(atomate.vasp.firetasks.write_inputs.ModifyPotcar method)</a>
 </li>
         <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.write_inputs.WriteNormalmodeDisplacedPoscar.run_task">(atomate.vasp.firetasks.write_inputs.WriteNormalmodeDisplacedPoscar method)</a>
 </li>
@@ -1309,6 +1329,8 @@
 </li>
       <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups.test_custodian_powerups">test_custodian_powerups() (atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups method)</a>
 </li>
+      <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_drones.VaspToDbTaskDroneTest.test_detect_output_file_paths">test_detect_output_file_paths() (atomate.vasp.tests.test_drones.VaspToDbTaskDroneTest method)</a>
+</li>
       <li><a href="atomate.feff.workflows.tests.html#atomate.feff.workflows.tests.test_eels_workflows.TestEELSWorkflow.test_eels_wflow_abatom_by_idx">test_eels_wflow_abatom_by_idx() (atomate.feff.workflows.tests.test_eels_workflows.TestEELSWorkflow method)</a>
 </li>
       <li><a href="atomate.feff.workflows.tests.html#atomate.feff.workflows.tests.test_eels_workflows.TestEELSWorkflow.test_eels_wflow_abatom_by_symbol">test_eels_wflow_abatom_by_symbol() (atomate.feff.workflows.tests.test_eels_workflows.TestEELSWorkflow method)</a>
@@ -1333,10 +1355,18 @@
 </li>
       <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp.test_ioset_params">test_ioset_params() (atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp method)</a>
 </li>
-      <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups.test_modify_incar">test_modify_incar() (atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups method)</a>
+      <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp.test_modify_incar">test_modify_incar() (atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp method)</a>
+
+      <ul>
+        <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups.test_modify_incar">(atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups method)</a>
 </li>
-      <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp.test_modifyincar">test_modifyincar() (atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp method)</a>
+      </ul></li>
+      <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp.test_modify_potcar">test_modify_potcar() (atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp method)</a>
+
+      <ul>
+        <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups.test_modify_potcar">(atomate.vasp.tests.test_vasp_powerups.TestVaspPowerups method)</a>
 </li>
+      </ul></li>
       <li><a href="atomate.utils.tests.html#atomate.utils.tests.test_loaders.FuncTest.test_multi_parent">test_multi_parent() (atomate.utils.tests.test_loaders.FuncTest method)</a>
 </li>
       <li><a href="atomate.common.firetasks.tests.html#atomate.common.firetasks.tests.test_glue_tasks.TestPassCalcLocs.test_passcalclocs">test_passcalclocs() (atomate.common.firetasks.tests.test_glue_tasks.TestPassCalcLocs method)</a>
@@ -1349,14 +1379,14 @@
 </li>
       <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp.test_pmgobjects">test_pmgobjects() (atomate.vasp.firetasks.tests.test_write_vasp.TestWriteVasp method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="atomate.utils.tests.html#atomate.utils.tests.test_utils.UtilsTests.test_recursive_get_result">test_recursive_get_result() (atomate.utils.tests.test_utils.UtilsTests method)</a>
 </li>
       <li><a href="atomate.vasp.firetasks.tests.html#atomate.vasp.firetasks.tests.test_copy.TestCopyVaspOutputs.test_relax2_copy">test_relax2_copy() (atomate.vasp.firetasks.tests.test_copy.TestCopyVaspOutputs method)</a>
 </li>
       <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_drones.VaspToDbTaskDroneTest.test_runs_assimilate">test_runs_assimilate() (atomate.vasp.tests.test_drones.VaspToDbTaskDroneTest method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="atomate.vasp.tests.html#atomate.vasp.tests.test_setup.TestSetup.test_setup">test_setup() (atomate.vasp.tests.test_setup.TestSetup method)</a>
 </li>
       <li><a href="atomate.vasp.workflows.tests.html#atomate.vasp.workflows.tests.test_vasp_workflows.TestVaspWorkflows.test_single_Vasp">test_single_Vasp() (atomate.vasp.workflows.tests.test_vasp_workflows.TestVaspWorkflows method)</a>
@@ -1432,10 +1462,6 @@
       <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.parse_outputs.ThermalExpansionCoeffTask">ThermalExpansionCoeffTask (class in atomate.vasp.firetasks.parse_outputs)</a>
 </li>
       <li><a href="atomate.vasp.firetasks.html#atomate.vasp.firetasks.parse_outputs.ThermalExpansionCoeffToDb">ThermalExpansionCoeffToDb (class in atomate.vasp.firetasks.parse_outputs)</a>
-</li>
-      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder.tid_to_int">tid_to_int() (atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder static method)</a>
-</li>
-      <li><a href="atomate.vasp.builders.html#atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder.tid_to_str">tid_to_str() (atomate.vasp.builders.tasks_materials.TasksMaterialsBuilder method)</a>
 </li>
       <li><a href="atomate.common.firetasks.html#atomate.common.firetasks.parse_outputs.ToDbTask">ToDbTask (class in atomate.common.firetasks.parse_outputs)</a>
 </li>
