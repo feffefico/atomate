@@ -14,7 +14,7 @@ from fireworks import FiretaskBase, FWAction, explicit_serialize
 
 from atomate.vasp.fireworks.core import OptimizeFW, StaticFW, NonSCFFW, HSEBSFW
 from atomate.vasp.workflows.presets.core import wf_bandstructure_plus_hse
-from atomate.vasp.workflows.base.adsorption import get_slab_fw, slab_handlers
+from atomate.vasp.workflows.base.adsorption import get_slab_fw, SLAB_HANDLERS
 from atomate.vasp.firetasks.parse_outputs import BandedgesToDb
 from atomate.vasp.powerups import add_tags, add_modify_incar, modify_handlers
 from atomate.utils.utils import get_fws_and_tasks
@@ -28,15 +28,13 @@ __author__ = 'Joseph Montoya, Arunima Singh'
 __email__ = 'montoyjh@lbl.gov'
 
 def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp', 
-                        db_file=None, max_index=1, min_slab_size=12.0,
-                        min_vacuum_size=15.0, analysis=True):
+                        db_file=None, max_index=1, min_slab_size=15.0,
+                        min_vacuum_size=15.0, analysis=False, bulk=False):
     """
     Function to return workflow designed to return HSE band edges.
     In development.
     """
-    # First part of WF is standard BS + HSE with option for linemode
-    wf = wf_bandstructure_plus_hse(structure, gap_only=gap_only)
-    
+        
     # Second part of workflow is an HSE run on a minimal slab,
     # generated from the bulk structure
     sgp = {"min_slab_size": min_slab_size,
@@ -57,25 +55,33 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
     slab_fws.append(NonSCFFW(slab, parents=slab_fws[-1], name="slab", **cparams))
     slab_fws.append(HSEBSFW(slab, parents=slab_fws[-1], name="slab_hse", **cparams))
     wf_slab = Workflow(slab_fws)
-    wf.append_wf(wf_slab, wf.root_fw_ids)
-    if analysis:
-        wf_analysis = Workflow([
-            Firework(BandedgesToDb(structure=structure, db_file=db_file, fw_spec_field='tags'),
-                     name="Bandedge analysis")])
-        wf.append_wf(wf_analysis, wf.leaf_fw_ids)
+
+    if bulk:
+        # Create bulk workflow and append slab WF
+        wf = wf_bandstructure_plus_hse(structure, gap_only=gap_only)
+
+        wf.append_wf(wf_slab, wf.root_fw_ids)
+        if analysis:
+            wf_analysis = Workflow([
+                Firework(BandedgesToDb(structure=structure, db_file=db_file, fw_spec_field='tags'),
+                         name="Bandedge analysis")])
+            wf.append_wf(wf_analysis, wf.leaf_fw_ids)
+    else:
+        wf = wf_slab
     
     # Turn off NPAR for HSE fireworks
-    wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"NPAR": 1}}, 
-                          fw_name_constraint='hse')
+    # NOTE: remove for now, HSE may need more memory
+    # wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"NPAR": 1}}, 
+    #                       fw_name_constraint='hse')
 
     # Turn on LVTOT in relevant FWs
-    wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"LVTOT": True, "PREC": "Normal", "ENAUG": 2000}},
+    slab_incar_params = {"incar_update": {"LVTOT": True, "PREC": "Normal", "ENAUG": 2000}}
+    wf = add_modify_incar(wf, modify_incar_params=slab_incar_params, 
                           fw_name_constraint="slab")
 
-    # Modify handlers (TODO: make a preset handler_group)
-    # This is so that the slab fws don't exit on IBZKPT errors
-    wf = modify_handlers(wf, slab_handlers, fw_name_constraint='slab')
-
+    # Modify slab handlers
+    wf = modify_handlers(wf, SLAB_HANDLERS, fw_name_constraint='slab')
+    wf = add_additional_fields_to_taskdoc(wf, {"parent_structure": structure})
     return wf
 
 
