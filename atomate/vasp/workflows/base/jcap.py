@@ -16,7 +16,8 @@ from atomate.vasp.fireworks.core import OptimizeFW, StaticFW, NonSCFFW, HSEBSFW
 from atomate.vasp.workflows.presets.core import wf_bandstructure_plus_hse
 from atomate.vasp.workflows.base.adsorption import get_slab_fw, SLAB_HANDLERS
 from atomate.vasp.firetasks.parse_outputs import BandedgesToDb
-from atomate.vasp.powerups import add_tags, add_modify_incar, modify_handlers
+from atomate.vasp.powerups import add_tags, add_modify_incar, modify_handlers,\
+        add_additional_fields_to_taskdocs
 from atomate.utils.utils import get_fws_and_tasks
 
 
@@ -81,7 +82,7 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
 
     # Modify slab handlers
     wf = modify_handlers(wf, SLAB_HANDLERS, fw_name_constraint='slab')
-    wf = add_additional_fields_to_taskdoc(wf, {"parent_structure": structure})
+    wf = add_additional_fields_to_taskdocs(wf, {"parent_structure": structure})
     return wf
 
 
