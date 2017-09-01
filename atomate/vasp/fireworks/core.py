@@ -29,7 +29,7 @@ class OptimizeFW(Firework):
     def __init__(self, structure, name="structure optimization", vasp_input_set=None,
                  vasp_cmd="vasp", override_default_vasp_params=None, ediffg=None, db_file=None,
                  force_gamma=True, job_type="double_relaxation_run", max_force_threshold=0.25,
-                 auto_npar=">>auto_npar<<", parents=None, handler_group='default', **kwargs):
+                 auto_npar=">>auto_npar<<", parents=None, **kwargs):
         """
         Optimize the given structure.
 
@@ -58,7 +58,7 @@ class OptimizeFW(Firework):
         t.append(WriteVaspFromIOSet(structure=structure, vasp_input_set=vasp_input_set))
         t.append(RunVaspCustodian(vasp_cmd=vasp_cmd, job_type=job_type,
                                   max_force_threshold=max_force_threshold, ediffg=ediffg,
-                                  auto_npar=auto_npar, handler_group=handler_group))
+                                  auto_npar=auto_npar))
         t.append(PassCalcLocs(name=name))
         t.append(VaspToDb(db_file=db_file, additional_fields={"task_label": name}))
         super(OptimizeFW, self).__init__(t, parents=parents, name="{}-{}".
@@ -132,8 +132,7 @@ class HSEBSFW(Firework):
 
         t = []
         t.append(CopyVaspOutputs(calc_loc=True, additional_files=["CHGCAR"]))
-        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode, 
-                                        kpoints_line_density=kpoints_line_density))
+        t.append(WriteVaspHSEBSFromPrev(prev_calc_dir='.', mode=mode))
         t.append(RunVaspCustodian(vasp_cmd=vasp_cmd))
         t.append(PassCalcLocs(name=name))
         t.append(VaspToDb(db_file=db_file, additional_fields={"task_label": name}))
