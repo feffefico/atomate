@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Running workflows tutorial &#8212; atomate 0.5.8 documentation</title>
+    <title>Running workflows tutorial &#8212; atomate 0.6.1 documentation</title>
     
     <link rel="stylesheet" href="_static/nature.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.5.8',
+        VERSION:     '0.6.1',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true,
@@ -26,8 +26,8 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Creating Workflows" href="creating_workflows.html" />
-    <link rel="prev" title="Installing atomate" href="installation.html" /> 
+    <link rel="next" title="Running Gibbs Workflows" href="gibbs_workflow_tutorial.html" />
+    <link rel="prev" title="Installing atomate in development mode" href="developer_installation.html" /> 
   </head>
   <body role="document">
     <div class="related" role="navigation" aria-label="related navigation">
@@ -40,12 +40,12 @@
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="creating_workflows.html" title="Creating Workflows"
+          <a href="gibbs_workflow_tutorial.html" title="Running Gibbs Workflows"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="installation.html" title="Installing atomate"
+          <a href="developer_installation.html" title="Installing atomate in development mode"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.5.8 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.6.1 documentation</a> &#187;</li> 
       </ul>
     </div>  
 
@@ -199,7 +199,7 @@ Unless there were any errors, the Fireworks have successfully finished launching
 <p>Finally, we&#8217;ll plot the results that we calculated.
 Simply add the following Python script (<code class="docutils literal"><span class="pre">bs-analysis.py</span></code>) to your folder, <strong>change the ``PATH_TO_MY_DB_JSON`` to the path to your ``db.json`` file</strong> (e.g. <code class="docutils literal"><span class="pre">&lt;&lt;INSTALL_DIR&gt;&gt;/config/db.json</span></code>), and run the script.</p>
 <div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">atomate.vasp.database</span> <span class="kn">import</span> <span class="n">VaspCalcDb</span>
-<span class="kn">from</span> <span class="nn">pymatgen.electronic_structure.plotter</span> <span class="kn">import</span> <span class="n">DosPlotter</span><span class="p">,</span> <span class="n">BSDOSPlotter</span>
+<span class="kn">from</span> <span class="nn">pymatgen.electronic_structure.plotter</span> <span class="kn">import</span> <span class="n">DosPlotter</span><span class="p">,</span> <span class="n">BSPlotter</span>
 
 <span class="c1"># create the atomate db from your db.json</span>
 <span class="n">PATH_TO_MY_DB_JSON</span> <span class="o">=</span> <span class="s1">&#39;/path/to/my/db.json&#39;</span>
@@ -227,8 +227,8 @@ Simply add the following Python script (<code class="docutils literal"><span cla
 <span class="c1"># Instatiate a bandstructure plotter and plot the bandstructure.</span>
 <span class="c1"># You can uncomment out the get_plot if you have a GUI frontend to plot to.</span>
 <span class="n">bs_plotter</span> <span class="o">=</span> <span class="n">BSPlotter</span><span class="p">(</span><span class="n">bandstructure</span><span class="p">)</span>
-<span class="c1"># bs_plotter.get_plot()</span>
-<span class="n">bs_plotter</span><span class="o">.</span><span class="n">save_plot</span><span class="p">(</span><span class="s1">&#39;MgO-bandstructure.pdf&#39;</span><span class="p">,</span> <span class="n">img_format</span><span class="o">=</span><span class="s1">&#39;pdf&#39;</span><span class="p">)</span>
+<span class="n">bs_plotter</span><span class="o">.</span><span class="n">get_plot</span><span class="p">()</span>
+<span class="c1"># bs_plotter.save_plot(&#39;MgO-bandstructure.pdf&#39;, img_format=&#39;pdf&#39;)</span>
 </pre></div>
 </div>
 <p>If you open the saved figures, you should see a plot of your DOS and bandstructure!</p>
@@ -242,11 +242,13 @@ Simply add the following Python script (<code class="docutils literal"><span cla
 <div class="section" id="conclusion">
 <h2>Conclusion<a class="headerlink" href="#conclusion" title="Permalink to this headline">¶</a></h2>
 <p>In this tutorial you learned how run a workflow from in a YAML file without writing any code and to do the same in Python.</p>
-<p>To see what preset workflows can be run, see the documentation that includes them at <a class="reference internal" href="atomate.vasp.workflows.presets.html#module-atomate.vasp.workflows.presets" title="atomate.vasp.workflows.presets"><code class="xref py py-mod docutils literal"><span class="pre">atomate.vasp.workflows.presets</span></code></a>.
-They can be set up the same way as in this tutorial.
-Another example follows for running a Gibbs free energy workflow: <a class="reference internal" href="gibbs_workflow_tutorial.html#running-gibbs-workflows"><span class="std std-ref">Running Gibbs Workflows</span></a>.</p>
-<p>Eventually you may want to create your own workflows that you can use and distribute.
-The <a class="reference internal" href="creating_workflows.html#creating-workflows"><span class="std std-ref">Creating Workflows</span></a> article is a guide for writing custom workflows in Python.</p>
+<p>To see what preset workflows can be run, see the documentation that includes them at <a class="reference internal" href="atomate.vasp.workflows.presets.html#module-atomate.vasp.workflows.presets" title="atomate.vasp.workflows.presets"><code class="xref py py-mod docutils literal"><span class="pre">atomate.vasp.workflows.presets</span></code></a>. They can be set up the same way as in this tutorial.</p>
+<p>At this point, you might:</p>
+<ul class="simple">
+<li>Try another example: running a Gibbs free energy workflow: <a class="reference internal" href="gibbs_workflow_tutorial.html#running-gibbs-workflows"><span class="std std-ref">Running Gibbs Workflows</span></a>.</li>
+<li>Skip to exploring how to use builders to generate metadata: <a class="reference internal" href="builders.html#builders"><span class="std std-ref">Builders: creating calculation reports for data analysis</span></a>.</li>
+<li>Skip to learning how to create your own workflows that you can use and distribute: <a class="reference internal" href="creating_workflows.html#creating-workflows"><span class="std std-ref">Creating Workflows</span></a>.</li>
+</ul>
 </div>
 </div>
 
@@ -279,11 +281,11 @@ The <a class="reference internal" href="creating_workflows.html#creating-workflo
 </ul>
 
   <h4>Previous topic</h4>
-  <p class="topless"><a href="installation.html"
-                        title="previous chapter">Installing atomate</a></p>
+  <p class="topless"><a href="developer_installation.html"
+                        title="previous chapter">Installing atomate in development mode</a></p>
   <h4>Next topic</h4>
-  <p class="topless"><a href="creating_workflows.html"
-                        title="next chapter">Creating Workflows</a></p>
+  <p class="topless"><a href="gibbs_workflow_tutorial.html"
+                        title="next chapter">Running Gibbs Workflows</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -315,12 +317,12 @@ The <a class="reference internal" href="creating_workflows.html#creating-workflo
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="creating_workflows.html" title="Creating Workflows"
+          <a href="gibbs_workflow_tutorial.html" title="Running Gibbs Workflows"
              >next</a> |</li>
         <li class="right" >
-          <a href="installation.html" title="Installing atomate"
+          <a href="developer_installation.html" title="Installing atomate in development mode"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.5.8 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.6.1 documentation</a> &#187;</li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">

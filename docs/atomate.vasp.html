@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>atomate.vasp package &#8212; atomate 0.5.8 documentation</title>
+    <title>atomate.vasp package &#8212; atomate 0.6.1 documentation</title>
     
     <link rel="stylesheet" href="_static/nature.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.5.8',
+        VERSION:     '0.6.1',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true,
@@ -37,7 +37,7 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.5.8 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.6.1 documentation</a> &#187;</li> 
       </ul>
     </div>  
 
@@ -577,6 +577,20 @@ structure: (Structure) the structure being run by this workflow</dd>
 </dd></dl>
 
 <dl class="function">
+<dt id="atomate.vasp.powerups.clear_modify">
+<code class="descclassname">atomate.vasp.powerups.</code><code class="descname">clear_modify</code><span class="sig-paren">(</span><em>original_wf</em>, <em>fw_name_constraint=None</em><span class="sig-paren">)</span><a class="headerlink" href="#atomate.vasp.powerups.clear_modify" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple powerup that clears the modifications to a workflow.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first last docutils">
+<dt>fw_name_constraint (str): name constraint for fireworks to</dt>
+<dd>have their modification tasks removed</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="atomate.vasp.powerups.modify_to_soc">
 <code class="descclassname">atomate.vasp.powerups.</code><code class="descname">modify_to_soc</code><span class="sig-paren">(</span><em>original_wf</em>, <em>nbands</em>, <em>structure=None</em>, <em>modify_incar_params=None</em>, <em>fw_name_constraint=None</em><span class="sig-paren">)</span><a class="headerlink" href="#atomate.vasp.powerups.modify_to_soc" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes a regular workflow and transforms its VASP fireworkers that are specified with
@@ -814,7 +828,7 @@ require_bandstructure (bool): For MP checks, require a band structure calc</dd>
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.5.8 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">atomate 0.6.1 documentation</a> &#187;</li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">

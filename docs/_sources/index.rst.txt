@@ -129,6 +129,7 @@ Installation
     :maxdepth: 3
 
     installation
+    developer_installation
 
 Running workflows
 =================
@@ -137,12 +138,9 @@ Running workflows
     :maxdepth: 3
 
     running_workflows
-<<<<<<< HEAD
-    eos_workflow_tutorial
-    builders
-=======
     gibbs_workflow_tutorial
->>>>>>> ae352e682a07d49fae6cc598bbdfd9193aec46d0
+    builders
+
 
 Creating and customizing workflows
 ==================================
