@@ -42,10 +42,10 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
     sgp = {"min_slab_size": min_slab_size,
            "min_vacuum_size": min_vacuum_size}
     slabs = generate_all_slabs(structure, max_index=max_index, **sgp)
+    
     # Get min volume slab, try to get symmetric slab
     slabs = sorted(slabs, key=lambda x: (x.volume, not x.is_symmetric(), 
                                          len(SpacegroupAnalyzer(x).get_symmetry_operations())))
-    #import pdb; pdb.set_trace()
     slab = slabs[0]
 
     # TODO: decide whether we want to optimize slab, slab thickness, etc.
@@ -69,7 +69,7 @@ def get_hse_bandedge_wf(structure, gap_only=True, vasp_cmd='vasp',
                           fw_name_constraint='hse')
 
     # Turn on LVTOT in relevant FWs
-    wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"LVTOT": True}},
+    wf = add_modify_incar(wf, modify_incar_params={"incar_update": {"LVTOT": True, "PREC": "Normal", "ENAUG": 2000}},
                           fw_name_constraint="slab")
 
     # Modify handlers (TODO: make a preset handler_group)
