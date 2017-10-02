@@ -156,6 +156,23 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
     return wfs
 
 
+def get_oxide_surface_workflow(bulk_oxide, gen_slab_params={}, vasp_input_set=None,
+                               complete_o_coord=True):
+    """
+    Quick function to get surface stability calcs for a given oxide
+    """
+    gsp = default_slab_gen_params.copy()
+    gsp.update(gen_slab_params)
+
+    conv = SpacegroupAnalyzer(bulk_oxide).get_conventional_standard_structure()
+    slabs = generate_all_slabs(bulk_oxide, gsp)
+    all_slabs
+    for slab in slabs:
+
+
+
+
+
 def get_termination(slab, start=0.2):
     temp_slab = Structure(slab.lattice, slab.species, slab.frac_coords)
     asf = AdsorbateSiteFinder(temp_slab, height=start)
@@ -167,7 +184,7 @@ def get_termination(slab, start=0.2):
     return Structure.from_sites(asf.surface_sites).composition.reduced_formula
 
 def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0,
-                                direction='top'):
+                                direction='top', restoich=False):
     """
     This method checks whether or not the two surfaces of the slab are
     equivalent. If the point group of the slab has an inversion symmetry (
@@ -257,7 +274,6 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
         slab.add_site_property("selective_dynamics", sd)
     assert slab.is_symmetric, "resultant slab not symmetric"
     return slab
-
 
 def decorate_bulk_coord(structure, radius=2.5):
     """
