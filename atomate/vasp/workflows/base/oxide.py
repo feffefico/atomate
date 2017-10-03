@@ -3,6 +3,8 @@ This module defines a workflow for OER on O-terminated oxide surfaces
 """
 
 import numpy as np
+import itertools
+
 from copy import copy
 from fireworks import Workflow, Firework, FiretaskBase, explicit_serialize
 from atomate.utils.utils import get_logger
@@ -19,7 +21,7 @@ from pymatgen.transformations.standard_transformations import SupercellTransform
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.io.vasp.sets import MVLSlabSet, MPRelaxSet
 from pymatgen import Structure, Lattice, Molecule
-from pymatgen.util.coord_utils import find_in_coord_list
+from pymatgen.util.coord import find_in_coord_list
 
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
@@ -147,7 +149,7 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
         if output:
             filename = "{}_{}_term_{}.cif".format(slab.composition.reduced_formula,
                                                   termination, mi_string)
-            print "Writing {}".format(filename)
+            #print "Writing {}".format(filename)
             slab.to(filename=filename)
         wf = add_tags(wf, ["{} terminated".format(termination),
                            "{} index".format(mi_string),
@@ -168,9 +170,7 @@ def get_oxide_surface_workflow(bulk_oxide, gen_slab_params={}, vasp_input_set=No
     slabs = generate_all_slabs(bulk_oxide, gsp)
     all_slabs
     for slab in slabs:
-
-
-
+        pass
 
 
 def get_termination(slab, start=0.2):
@@ -275,23 +275,31 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     assert slab.is_symmetric, "resultant slab not symmetric"
     return slab
 
+
+def get_bulk_coord(structure, site, radius=2.5):
+    neighbors = structure.get_neighbors(site, radius)
+    sites_by_species = itertools.groupby(neighbors, lambda x: x[0].species_string)
+    #TODO: this is nuts, you should fix it
+    return {k: sorted([(neighbor[0].coords - site.coords, neighbor[0].properties['enum']) for neighbor in g],
+                      key=lambda x: x[1])
+            for k, g in sites_by_species}
+
 def decorate_bulk_coord(structure, radius=2.5):
     """
     Assigns bulk coordination dictionary that can help
     identify undercoordinated sites and their missing
     coordinated atoms
     """
-    # TODO: figure out sensible radius 
+    # TODO: figure out sensible radius
     # TODO: referencing, rotations?
-    neighbor_sets = structure.get_all_neighbors(r=radius)
-    props = []
-    for n, neighbor_set in enumerate(neighbor_sets):
-        sites_by_species = groupby(neighbor_set, lambda x: x[0].species_string)
-        props.append({k: [site[0].coords - structure[n].coords for site in g]
-                      for k, g in sites_by_species})
     new_struct = structure.copy()
+    if 'enum' not in structure.site_properties:
+        new_struct.add_site_property('enum', list(range(new_struct.num_sites)))
+    props = [get_bulk_coord(new_struct, site, radius=radius) for site in structure]
     new_struct.add_site_property("bulk_neighbors", props)
     return new_struct
+
+def complete_coordination(
 
 
 @explicit_serialize
