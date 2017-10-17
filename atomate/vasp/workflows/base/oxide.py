@@ -21,7 +21,7 @@ from pymatgen.transformations.standard_transformations import SupercellTransform
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.io.vasp.sets import MVLSlabSet, MPRelaxSet
 from pymatgen import Structure, Lattice, Molecule
-from pymatgen.util.coord import find_in_coord_list
+from pymatgen.util.coord import find_in_coord_list, in_coord_list_pbc
 
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
@@ -35,7 +35,7 @@ default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "ENCUT":500,
                "BMIX": 0.0001, "ISYM":0, "BMIX_MAG": 0.0001, 
                "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 2, "EDIFF":1e-6}
 default_sip = default_aip
-default_slab_gen_params = {"max_index": 1, "min_slab_size": 12.0, "min_vacuum_size": 20.0,
+default_slab_gen_params = {"max_index": 1, "min_slab_size": 15.0, "min_vacuum_size": 15.0,
                            "center_slab": True}
 
 
@@ -158,19 +158,51 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
     return wfs
 
 
-def get_oxide_surface_workflow(bulk_oxide, gen_slab_params={}, vasp_input_set=None,
-                               complete_o_coord=True):
+def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
     """
     Quick function to get surface stability calcs for a given oxide
     """
     gsp = default_slab_gen_params.copy()
     gsp.update(gen_slab_params)
+    gsp.update({"label_layers":True})
 
     conv = SpacegroupAnalyzer(bulk_oxide).get_conventional_standard_structure()
-    slabs = generate_all_slabs(bulk_oxide, gsp)
-    all_slabs
+    slabs = generate_all_slabs(conv, **gsp)
+    all_slabs = []
+
     for slab in slabs:
-        pass
+        # Add tasker corrected slab
+        if not slab.is_symmetric():
+            tasker2_slabs = slab.get_tasker2_slabs()
+            if tasker2_slabs:
+                all_slabs += [tasker2_slabs]
+            else:
+                new_slab = slab.copy()
+                if slab.lattice.a > slab.lattice.b:
+                    new_slab.make_supercell([1, 2, 1])
+                else:
+                    new_slab.make_supercell([2, 1, 1])
+                all_slabs += [new_slab.get_tasker2_slabs()]
+        else:
+            all_slabs += [slab]
+        # Add O terminated slab
+        oterm_slab = add_bonded_O_to_surface(slab, r=2.5)
+        oterm_slab = symmetrize_slab_by_addition(oterm_slab)
+        all_slabs += [oterm_slab]
+    return all_slabs
+
+def get_oxide_wflow(bulk_oxide, gen_slab_params={}, ):
+    slabs = get_oxide_slabs(bulk_oxide)
+    formula = bulk_oxide.composition.reduced_formula
+    for slab in slabs:
+        if slab.composition.reduced_formula == formula
+            name = formula
+        else:
+            name = 'O-'+formula
+        name += ''.join(str(i) for i in slab.miller_index)
+        slab_fws += [get_slab_fw(slab, name=name)]
+    wf = Workflow(slab_fws, name="{} slabs".format(formula))
+    return wf
 
 
 def get_termination(slab, start=0.2):
@@ -245,7 +277,8 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     symmops = sg.get_symmetry_operations()
     inv_symmops = [symmop for symmop in symmops
                    if (symmop.rotation_matrix==-np.eye(3)).all()
-                   and (symmop.translation_vector[:2]==0).all()]
+                   #and (symmop.translation_vector[:2]==0).all()
+                   ]
     assert len(inv_symmops)==1, "More than one inv_symmop"
     inv_so = inv_symmops[0]
     for site in removed_sites:
@@ -299,8 +332,53 @@ def decorate_bulk_coord(structure, radius=2.5):
     new_struct.add_site_property("bulk_neighbors", props)
     return new_struct
 
-def complete_coordination(
+def clean_layer(slab, layers_to_remove=1, keep_species={}):
+    """
+    Removes all sites from the topmost layer except
+    those which are O sites bound to sites in lower layers.
+    """
+    if not "layer" in slab.site_properties:
+        raise ValueError("Layer must be assigned to use clean_layer")
+    new_slab = slab.copy()
+    max_layer = max(slab.site_properties['layer'])
+    top_layer = [site for site in slab if site.properties['layer']==max_layer]
+    sites_to_remove = [slab.index(s) for s in top_layer]
+    if keep_species:
+        for site in top_layer:
+            species = site.species_string
+            if species in keep_species:
+                neighbors = slab.get_neighbors(site, keep_species[species])
+                if max_layer - 1 in [n[0].properties['layer'] for n in neighbors]:
+                    #TODO: maybe make this more sophisticated
+                    sites_to_remove.remove(slab.index(site))
+    new_slab.remove_sites(sites_to_remove)
+    return new_slab
 
+def add_bonded_O_to_surface(slab, r=2.5, mode='top'):
+    assert 1 in slab.site_properties['layer'], "Slab must be composed of at least 2 layers"
+    new_slab = slab.copy()
+    if mode is 'top':
+        max_layer = max(slab.site_properties['layer'])
+        top_layer = [site for site in slab if site.properties['layer']==max_layer]
+        sub_layer = [site for site in slab if site.properties['layer']==max_layer-1]
+    elif mode is 'bottom':
+        max_layer = 0
+        top_layer = [site for site in slab if site.properties['layer']==max_layer]
+        sub_layer = [site for site in slab if site.properties['layer']==max_layer+1]
+    else:
+        raise ValueError("Mode must be \"top\" or \"bottom\"")
+    vec = top_layer[-1].coords - sub_layer[-1].coords # hope these are organized
+    for site in sub_layer:
+        if site.species_string != 'O':
+            # TODO: make this more general for bonds
+            neighbors = slab.get_neighbors(site, r)
+            for neighbor, dist in neighbors:
+                if neighbor.properties['layer'] == max_layer:
+                    pos = slab.lattice.get_fractional_coords(vec + neighbor.coords)
+                    pos = pos % 1
+                    if not in_coord_list_pbc(new_slab.frac_coords, pos):
+                        new_slab.append('O', pos)
+    return new_slab
 
 @explicit_serialize
 def PassEnergyStructureTask(FireTaskBase):
@@ -310,12 +388,26 @@ def PassEnergyStructureTask(FireTaskBase):
     def run_task(self):
         pass
 
+
 if __name__=="__main__":
     from pymatgen import MPRester
     from personal.functions import pdb_function
     from pymatgen.core.surface import SlabGenerator
     from atomate.vasp.powerups import add_modify_incar
     mpr = MPRester()
+    slabs = {}
+    mpid = 'mp-714882'
+    struct = mpr.get_structure_by_material_id(mpid)
+    conv = SpacegroupAnalyzer(struct).get_conventional_standard_structure()
+    conv = decorate_bulk_coord(conv)
+    slabs[mpid] = generate_all_slabs(conv, max_index=1, min_slab_size=15.0, 
+                                     min_vacuum_size=15.0, label_layers=True)
+    slab = slabs[mpid][1]
+    new = clean_layer(slab)
+    new_2 = add_bonded_O_to_surface(slab)
+    all_slabs = get_oxide_slabs(conv)
+
+    """
     structure = mpr.get_structures("mp-5229")[0]
     wfs = pdb_function(get_wfs_oxide_from_bulk, structure, ads_structures_params={"repeat":[1, 1, 1]})
     slabs = generate_all_slabs(structure, **default_slab_gen_params)
@@ -323,19 +415,16 @@ if __name__=="__main__":
     new_slab = slabs[0].copy()
     new_slab.apply_operation(so, fractional=True)
     symm_slab = pdb_function(symmetrize_slab_by_addition, slabs[0])
-    """
     slabs[0].to(filename="111.cif")
     new_slab.to(filename="111_inv.cif")
-    """
     #symm_slab.to(filename="POSCAR")
-    """
     for n, fw in enumerate(wfs[0].fws[1:]):
         fw.tasks[0]['structure'].to(filename="ads_{}.cif".format(n))
-    """
     from fireworks import LaunchPad
     wfs_mod = [add_modify_incar(wf) for wf in wfs]
     wfs_mod = [add_modify_incar(wf, {"incar_update":{"IBRION":2, "NSW":"25"}})]
     lpad = LaunchPad.auto_load()
     lpad.add_wf(wfs_mod[0])
+    """
 
 
