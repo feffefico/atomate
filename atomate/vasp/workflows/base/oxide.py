@@ -11,6 +11,7 @@ from atomate.utils.utils import get_logger
 from atomate.vasp.fireworks.core import OptimizeFW, TransmuterFW, StaticFW
 from atomate.vasp.powerups import add_tags
 from atomate.vasp.firetasks.parse_outputs import OERAnalysisTask
+from atomate.vasp.workflows.base.adsorption import get_slab_fw
 
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.core.operations import SymmOp
@@ -182,7 +183,7 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
                     new_slab.make_supercell([1, 2, 1])
                 else:
                     new_slab.make_supercell([2, 1, 1])
-                all_slabs += [new_slab.get_tasker2_slabs()]
+                all_slabs += new_slab.get_tasker2_slabs()
         else:
             all_slabs += [slab]
         # Add O terminated slab
@@ -194,13 +195,15 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
 def get_oxide_wflow(bulk_oxide, gen_slab_params={}, ):
     slabs = get_oxide_slabs(bulk_oxide)
     formula = bulk_oxide.composition.reduced_formula
+    slab_fws = []
     for slab in slabs:
-        if slab.composition.reduced_formula == formula
+        if slab.composition.reduced_formula == formula:
             name = formula
         else:
             name = 'O-'+formula
         name += ''.join(str(i) for i in slab.miller_index)
-        slab_fws += [get_slab_fw(slab, name=name)]
+        slab_fws += [get_slab_fw(slab, name=name, vasp_cmd=">>vasp_cmd<<",
+                                 db_file=">>db_file<<")]
     wf = Workflow(slab_fws, name="{} slabs".format(formula))
     return wf
 
