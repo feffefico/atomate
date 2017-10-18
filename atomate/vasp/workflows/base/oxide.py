@@ -36,7 +36,7 @@ default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "ENCUT":500,
                "BMIX": 0.0001, "ISYM":0, "BMIX_MAG": 0.0001, 
                "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 2, "EDIFF":1e-6}
 default_sip = default_aip
-default_slab_gen_params = {"max_index": 1, "min_slab_size": 15.0, "min_vacuum_size": 15.0,
+default_slab_gen_params = {"max_index": 1, "min_slab_size": 10.0, "min_vacuum_size": 15.0,
                            "center_slab": True}
 
 
@@ -173,6 +173,7 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
 
     for slab in slabs:
         # Add tasker corrected slab
+        # import pdb; pdb.set_trace()
         if not slab.is_symmetric():
             tasker2_slabs = slab.get_tasker2_slabs()
             if tasker2_slabs:
@@ -183,10 +184,21 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
                     new_slab.make_supercell([1, 2, 1])
                 else:
                     new_slab.make_supercell([2, 1, 1])
-                all_slabs += new_slab.get_tasker2_slabs()
+                tasker2_slabs = new_slab.get_tasker2_slabs()
+            if not all([s.is_symmetric() for s in tasker2_slabs]):
+                tasker2_slabs = [symmetrize_slab_by_addition(
+                                 slab, restoich=True, sd_height=None)]
+            all_slabs += tasker2_slabs
         else:
             all_slabs += [slab]
+        assert all([s.is_symmetric() for s in all_slabs])
         # Add O terminated slab
+        """
+        if slab.is_symmetric():
+            oterm_slab = add_bonded_O_to_surface(slab, r=2.5)
+            oterm_slab = add_bonded_O_to_surface(oterm_slab, mode='bottom', r=2.5)
+        else:
+        """
         oterm_slab = add_bonded_O_to_surface(slab, r=2.5)
         oterm_slab = symmetrize_slab_by_addition(oterm_slab)
         all_slabs += [oterm_slab]
@@ -284,22 +296,30 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
                    ]
     assert len(inv_symmops)==1, "More than one inv_symmop"
     inv_so = inv_symmops[0]
+    all_coords = []
     for site in removed_sites:
         inv_fcoords = inv_so.operate(site.frac_coords)
         slab.append(site.specie, site.frac_coords, properties=site.properties)
         slab.append(site.specie, inv_fcoords, properties=site.properties)
+        all_coords.append(site.coords)
+        all_coords.append(slab[-1].coords)
+    all_coords = np.array(all_coords)
     if recenter:
-        slab.translate_sites(list(range(len(slab))), [0, 0, 0.5 - np.average(slab.frac_coords[:, 2])])
+        trans_vec = np.array([0, 0, 0.5 - np.average(slab.frac_coords[:, 2])])
+        all_coords += slab.lattice.get_cartesian_coords(trans_vec)
+        slab.translate_sites(list(range(len(slab))), trans_vec)
 
     if restoich:
         # copy in smallest direction
         if slab.lattice.a > slab.lattice.b:
             slab.make_supercell([1, 2, 1])
+            #all_coords[1, :] /= 2
         else:
             slab.make_supercell([2, 1, 1])
-        indices = range(slab.num_sites - 2*removed_sites, slab.num_sites)
+            #all_coords[0, :] /= 2
+        indices = [find_in_coord_list(slab.cart_coords, coord) for coord in all_coords]
         slab.remove_sites(indices=indices)
-        assert slab_old.composition == slab.composition, "Restoich failed"
+        assert slab_old.composition.reduced_formula == slab.composition.reduced_formula, "Restoich failed"
 
     if sd_height:
         mvec = AdsorbateSiteFinder(slab).mvec
@@ -308,9 +328,8 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
         sd = [[False]*3 if mn+sd_height <= proj <= mx-sd_height 
               else [True]*3 for proj in projs]
         slab.add_site_property("selective_dynamics", sd)
-    assert slab.is_symmetric, "resultant slab not symmetric"
+    assert slab.is_symmetric(), "resultant slab not symmetric"
     return slab
-
 
 def get_bulk_coord(structure, site, radius=2.5):
     neighbors = structure.get_neighbors(site, radius)
@@ -370,18 +389,44 @@ def add_bonded_O_to_surface(slab, r=2.5, mode='top'):
         sub_layer = [site for site in slab if site.properties['layer']==max_layer+1]
     else:
         raise ValueError("Mode must be \"top\" or \"bottom\"")
-    vec = top_layer[-1].coords - sub_layer[-1].coords # hope these are organized
-    for site in sub_layer:
-        if site.species_string != 'O':
-            # TODO: make this more general for bonds
-            neighbors = slab.get_neighbors(site, r)
-            for neighbor, dist in neighbors:
-                if neighbor.properties['layer'] == max_layer:
+    for layer in set(slab.site_properties['layer']):
+        sub_layer = [site for site in slab if site.properties['layer'] == layer]
+        vec = top_layer[-1].coords - sub_layer[-1].coords # hope these are organized
+        for site in sub_layer:
+            if site.species_string != 'O':
+                # TODO: make this more general for bonds
+                neighbors = slab.get_neighbors(site, r)
+                for neighbor, dist in neighbors:
+                    # Don't think I actually need this constraint, the
+                    # in coord list should take care of it
+                    # if neighbor.properties['layer'] == max_layer:
                     pos = slab.lattice.get_fractional_coords(vec + neighbor.coords)
                     pos = pos % 1
                     if not in_coord_list_pbc(new_slab.frac_coords, pos):
-                        new_slab.append('O', pos)
+                        new_slab.append('O', pos, properties={"layer":None})
+                        #import pdb; pdb.set_trace()
     return new_slab
+
+def test_bonded_O(slab, r=2.5, mode='top'):
+    new = add_bonded_O_to_surface(slab)
+    new = add_bonded_O_to_surface(new, mode='bottom')
+    sites = [s for s in new.sites if s.species_string != 'O']
+    for site in sites:
+        surf_neighbors = new.get_neighbors(site, r=r)
+        bulk_neighbors = site.properties['bulk_neighbors']['O']
+        assert len(surf_neighbors) == len(bulk_neighbors)
+    return new
+
+def test_oxide_slabs(slabs):
+    """Quick test for symmetry and saturation"""
+    for n, slab in enumerate(slabs):
+        assert slab.is_symmetric()
+        bulk_formula = slab.oriented_unit_cell.composition.reduced_formula
+        if slab.composition.reduced_formula != bulk_formula:
+            for site in slab.sites:
+                if site.species_string != 'O':
+                    neighbors = slab.get_neighbors(site, r=2.5)
+                    assert len(neighbors) == 6 
 
 @explicit_serialize
 def PassEnergyStructureTask(FireTaskBase):
@@ -405,11 +450,12 @@ if __name__=="__main__":
     conv = decorate_bulk_coord(conv)
     slabs[mpid] = generate_all_slabs(conv, max_index=1, min_slab_size=15.0, 
                                      min_vacuum_size=15.0, label_layers=True)
-    slab = slabs[mpid][1]
-    new = clean_layer(slab)
-    new_2 = add_bonded_O_to_surface(slab)
-    all_slabs = get_oxide_slabs(conv)
+    slab = slabs[mpid][0]
 
+    #new = clean_layer(slab)
+    #new_2 = add_bonded_O_to_surface(slab)
+    all_slabs = get_oxide_slabs(conv)
+    test_oxide_slabs(all_slabs)
     """
     structure = mpr.get_structures("mp-5229")[0]
     wfs = pdb_function(get_wfs_oxide_from_bulk, structure, ads_structures_params={"repeat":[1, 1, 1]})
