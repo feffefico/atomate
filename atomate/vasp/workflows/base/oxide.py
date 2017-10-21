@@ -15,7 +15,7 @@ from atomate.vasp.workflows.base.adsorption import get_slab_fw
 
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.core.operations import SymmOp
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder, SLAB_HANDLERS
 from pymatgen.core.surface import generate_all_slabs
 from pymatgen.transformations.advanced_transformations import SlabTransformation
 from pymatgen.transformations.standard_transformations import SupercellTransformation
@@ -159,9 +159,14 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
     return wfs
 
 
-def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
+def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates):
     """
-    Quick function to get surface stability calcs for a given oxide
+    Quick function to get slabs for a given oxide
+
+    Args:
+        bulk_oxide (structure): bulk oxide structure
+        gen_slab_params (dict): params for generate_all_slabs function
+        add_adsorbates (bool): flag for whether to add adsorbates configs
     """
     gsp = default_slab_gen_params.copy()
     gsp.update(gen_slab_params)
@@ -202,9 +207,48 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}):
         oterm_slab = add_bonded_O_to_surface(slab, r=2.5)
         oterm_slab = symmetrize_slab_by_addition(oterm_slab)
         all_slabs += [oterm_slab]
+        # TODO: add hydroxylated
+        if add_hydroxylated:
+
+        # Just add adsorbates to top site for now
+        if add_adsorbates:
+            # Identify topmost site (should be O)
+            base = get_minlw_slab(oterm_slab, 5.0)
+            c_coords = base.frac_coords[:, 2]
+            indices = [np.argmin(c_coords), np.argmax(c_coords)]
+            site = base[indices[1]]
+            assert site.species_string == 'O'
+            molecules = [Molecule("H", [[ -8.15221440e-01,   4.35023640e-01,   3.23265180e-01]]),
+                         Molecule("OH", [[-1.16199703, -0.33129907, 0.78534692],
+                                         [ -0.77836053, -0.2210624, 1.68471111]])]
+            ads_slabs = []
+            # Add configs for OH, OOH
+            for molecule in molecules:
+                ads_slab = base.copy()
+                molecule.translate_sites(site.cart_coords)
+                ads_slab.extend(molecule.formula, molecule.coords)
+                ads_slab = symmetrize_slab_by_addition(ads_slab)
+                ads_slabs.append(ads_slab)
+            # Add vacancy (bare slab case)
+            ads_slab = oterm_slab.copy()
+            ads_slab.remove_sites(indices)
+            assert ads_slab.is_symmetric(), "vacancy slab is not symmetric"
+            ads_slabs.append(ads_slab)
+            all_slabs.extend(ads_slabs)
+            # Quick test
+            assert ads_slabs[0].num_sites = oterm_slab.num_sites + 2
+
     return all_slabs
 
-def get_oxide_wflow(bulk_oxide, gen_slab_params={}, ):
+def get_minlw_slab(slab, min_lw):
+    xrep = np.ceil(min_lw / np.linalg.norm(self.slab.lattice.matrix[0]))
+    yrep = np.ceil(min_lw / np.linalg.norm(self.slab.lattice.matrix[1]))
+    rep_slab = slab.copy()
+    rep_slab.make_supercell([xrep, yrep, 1])
+    return rep_slab
+
+def get_oxide_wflow(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
+                    add_hydroxylated=False):
     slabs = get_oxide_slabs(bulk_oxide)
     formula = bulk_oxide.composition.reduced_formula
     slab_fws = []
@@ -216,7 +260,9 @@ def get_oxide_wflow(bulk_oxide, gen_slab_params={}, ):
         name += ''.join(str(i) for i in slab.miller_index)
         slab_fws += [get_slab_fw(slab, name=name, vasp_cmd=">>vasp_cmd<<",
                                  db_file=">>db_file<<")]
+
     wf = Workflow(slab_fws, name="{} slabs".format(formula))
+    wf = modify_handlers(wf, SLAB_HANDLERS, fw_name_constraint='slab')
     return wf
 
 
