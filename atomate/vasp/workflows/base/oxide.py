@@ -11,11 +11,11 @@ from atomate.utils.utils import get_logger
 from atomate.vasp.fireworks.core import OptimizeFW, TransmuterFW, StaticFW
 from atomate.vasp.powerups import add_tags
 from atomate.vasp.firetasks.parse_outputs import OERAnalysisTask
-from atomate.vasp.workflows.base.adsorption import get_slab_fw
+from atomate.vasp.workflows.base.adsorption import get_slab_fw, SLAB_HANDLERS
 
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.core.operations import SymmOp
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder, SLAB_HANDLERS
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder, get_rot
 from pymatgen.core.surface import generate_all_slabs
 from pymatgen.transformations.advanced_transformations import SlabTransformation
 from pymatgen.transformations.standard_transformations import SupercellTransformation
@@ -159,7 +159,8 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
     return wfs
 
 
-def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates):
+def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
+                    add_hydroxylated=False):
     """
     Quick function to get slabs for a given oxide
 
@@ -167,6 +168,7 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates):
         bulk_oxide (structure): bulk oxide structure
         gen_slab_params (dict): params for generate_all_slabs function
         add_adsorbates (bool): flag for whether to add adsorbates configs
+        add_hydroxylated (bool): flag for whether to add hydroxylated surface
     """
     gsp = default_slab_gen_params.copy()
     gsp.update(gen_slab_params)
@@ -209,7 +211,7 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates):
         all_slabs += [oterm_slab]
         # TODO: add hydroxylated
         if add_hydroxylated:
-
+            pass
         # Just add adsorbates to top site for now
         if add_adsorbates:
             # Identify topmost site (should be O)
@@ -224,25 +226,29 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates):
             ads_slabs = []
             # Add configs for OH, OOH
             for molecule in molecules:
+                molecule.apply_operation(get_rot(base).inverse)
                 ads_slab = base.copy()
-                molecule.translate_sites(site.cart_coords)
-                ads_slab.extend(molecule.formula, molecule.coords)
+                molecule.translate_sites(vector=site.coords)
+                for msite in molecule:
+                    ads_slab.append(msite.species_string, msite.coords, coords_are_cartesian=True)
                 ads_slab = symmetrize_slab_by_addition(ads_slab)
                 ads_slabs.append(ads_slab)
             # Add vacancy (bare slab case)
-            ads_slab = oterm_slab.copy()
+            ads_slab = base.copy()
             ads_slab.remove_sites(indices)
             assert ads_slab.is_symmetric(), "vacancy slab is not symmetric"
             ads_slabs.append(ads_slab)
             all_slabs.extend(ads_slabs)
             # Quick test
-            assert ads_slabs[0].num_sites = oterm_slab.num_sites + 2
+            assert ads_slabs[0].num_sites == base.num_sites + 2
+            assert ads_slabs[1].num_sites == base.num_sites + 4
+            assert ads_slabs[2].num_sites == base.num_sites - 2
 
     return all_slabs
 
 def get_minlw_slab(slab, min_lw):
-    xrep = np.ceil(min_lw / np.linalg.norm(self.slab.lattice.matrix[0]))
-    yrep = np.ceil(min_lw / np.linalg.norm(self.slab.lattice.matrix[1]))
+    xrep = np.ceil(min_lw / np.linalg.norm(slab.lattice.matrix[0]))
+    yrep = np.ceil(min_lw / np.linalg.norm(slab.lattice.matrix[1]))
     rep_slab = slab.copy()
     rep_slab.make_supercell([xrep, yrep, 1])
     return rep_slab
@@ -277,7 +283,7 @@ def get_termination(slab, start=0.2):
     return Structure.from_sites(asf.surface_sites).composition.reduced_formula
 
 def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0,
-                                direction='top', restoich=False):
+                                direction='top', move_only=None, restoich=False):
     """
     This method checks whether or not the two surfaces of the slab are
     equivalent. If the point group of the slab has an inversion symmetry (
@@ -321,8 +327,15 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
             # Keep removing sites from the top one by one until both
             # surfaces are symmetric or the number of sites removed has
             # exceeded 10 percent of the original slab
-
             index = index_fn(slab.frac_coords[:, 2])
+            # Move Os first
+            os_on_top = np.logical_and(slab.frac_coords[:, 2] == slab[index].frac_coords[2],
+                                       [s.species_string=='O' for s in slab])
+
+            if np.any(os_on_top):
+                index = np.where(os_on_top)[0][0]
+
+            import pdb; pdb.set_trace()
             removed_sites.append(slab.pop(index))
 
             # Check if the altered surface is symmetric
@@ -340,7 +353,7 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
                    if (symmop.rotation_matrix==-np.eye(3)).all()
                    #and (symmop.translation_vector[:2]==0).all()
                    ]
-    assert len(inv_symmops)==1, "More than one inv_symmop"
+    assert len(inv_symmops)>=1, "Less than one inv_symmop"
     inv_so = inv_symmops[0]
     all_coords = []
     for site in removed_sites:
@@ -422,7 +435,7 @@ def clean_layer(slab, layers_to_remove=1, keep_species={}):
     new_slab.remove_sites(sites_to_remove)
     return new_slab
 
-def add_bonded_O_to_surface(slab, r=2.5, mode='top'):
+def add_bonded_O_to_surface(slab, r=2.5, mode='top', symmetrize=True):
     assert 1 in slab.site_properties['layer'], "Slab must be composed of at least 2 layers"
     new_slab = slab.copy()
     if mode is 'top':
@@ -439,7 +452,7 @@ def add_bonded_O_to_surface(slab, r=2.5, mode='top'):
         sub_layer = [site for site in slab if site.properties['layer'] == layer]
         vec = top_layer[-1].coords - sub_layer[-1].coords # hope these are organized
         for site in sub_layer:
-            if site.species_string != 'O':
+            if not site.species_string in ['O', 'H']:
                 # TODO: make this more general for bonds
                 neighbors = slab.get_neighbors(site, r)
                 for neighbor, dist in neighbors:
@@ -465,14 +478,37 @@ def test_bonded_O(slab, r=2.5, mode='top'):
 
 def test_oxide_slabs(slabs):
     """Quick test for symmetry and saturation"""
+    if not isinstance(slabs, list):
+        slabs = [slabs]
+        skip_comp = True
+    else:
+        skip_comp = False
     for n, slab in enumerate(slabs):
         assert slab.is_symmetric()
         bulk_formula = slab.oriented_unit_cell.composition.reduced_formula
-        if slab.composition.reduced_formula != bulk_formula:
+        if slab.composition.reduced_formula != bulk_formula or skip_comp:
             for site in slab.sites:
-                if site.species_string != 'O':
+                if site.species_string not in ['O', 'H']:
                     neighbors = slab.get_neighbors(site, r=2.5)
-                    assert len(neighbors) == 6 
+                    o_neighbors = [n[0] for n in neighbors if n[0].species_string=='O']
+                    # This is a lazy fix
+                    assert len(o_neighbors) >= 6 
+
+def test_problem_110():
+    from pymatgen import MPRester
+    mpr = MPRester()
+    slabs = {}
+    mpid = 'mp-714882'
+    struct = mpr.get_structure_by_material_id(mpid)
+    conv = SpacegroupAnalyzer(struct).get_conventional_standard_structure()
+    conv = decorate_bulk_coord(conv)
+    slabs[mpid] = generate_all_slabs(conv, max_index=1, min_slab_size=12.0, 
+                                     min_vacuum_size=18.0, label_layers=True)
+    slab_110 = slabs[mpid][1]
+    my_slab = add_bonded_O_to_surface(slab_110, symmetrize=False)
+    #my_slab = add_bonded_O_to_surface(slab_110, mode='bottom', symmetrize=False)
+    my_slab = symmetrize_slab_by_addition(my_slab)
+    test_oxide_slabs(my_slab)
 
 @explicit_serialize
 def PassEnergyStructureTask(FireTaskBase):
@@ -484,6 +520,7 @@ def PassEnergyStructureTask(FireTaskBase):
 
 
 if __name__=="__main__":
+    test_problem_110()
     from pymatgen import MPRester
     from personal.functions import pdb_function
     from pymatgen.core.surface import SlabGenerator
@@ -500,8 +537,8 @@ if __name__=="__main__":
 
     #new = clean_layer(slab)
     #new_2 = add_bonded_O_to_surface(slab)
-    all_slabs = get_oxide_slabs(conv)
-    test_oxide_slabs(all_slabs)
+    all_slabs = get_oxide_slabs(conv)#, add_adsorbates=True)
+    test_oxide_slabs(all_slabs[3])
     """
     structure = mpr.get_structures("mp-5229")[0]
     wfs = pdb_function(get_wfs_oxide_from_bulk, structure, ads_structures_params={"repeat":[1, 1, 1]})
