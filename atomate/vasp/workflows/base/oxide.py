@@ -225,12 +225,14 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
                                          [ -0.77836053, -0.2210624, 1.68471111]])]
             ads_slabs = []
             # Add configs for OH, OOH
+            props = {"layer":"ads"}
             for molecule in molecules:
                 molecule.apply_operation(get_rot(base).inverse)
                 ads_slab = base.copy()
                 molecule.translate_sites(vector=site.coords)
                 for msite in molecule:
-                    ads_slab.append(msite.species_string, msite.coords, coords_are_cartesian=True)
+                    ads_slab.append(msite.species_string, msite.coords, properties=props,
+                                    coords_are_cartesian=True)
                 ads_slab = symmetrize_slab_by_addition(ads_slab)
                 ads_slabs.append(ads_slab)
             # Add vacancy (bare slab case)
@@ -282,7 +284,7 @@ def get_termination(slab, start=0.2):
         surf = [site.species_string for site in asf.surface_sites]
     return Structure.from_sites(asf.surface_sites).composition.reduced_formula
 
-def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.0,
+def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=None,
                                 direction='top', move_only=None, restoich=False):
     """
     This method checks whether or not the two surfaces of the slab are
@@ -322,20 +324,29 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     else:
         asym = True
         removed_sites = []
+        adatoms = False
         while asym or len(slab) < 2:
             temp_slab = Structure(slab.lattice, slab.species, slab.frac_coords)
             # Keep removing sites from the top one by one until both
             # surfaces are symmetric or the number of sites removed has
             # exceeded 10 percent of the original slab
-            index = index_fn(slab.frac_coords[:, 2])
-            # Move Os first
-            os_on_top = np.logical_and(slab.frac_coords[:, 2] == slab[index].frac_coords[2],
-                                       [s.species_string=='O' for s in slab])
+            # TODO: oh god this is hacked together real bad
+            # Remove adsorbates first
+            if 'layer' in slab.site_properties and any([l is 'ads' for l in slab.site_properties['layer']]):
+                index = slab.site_properties['layer'].index('ads')
+                adatoms = True
+            # Remove any adatoms second:
+            elif 'layer' in slab.site_properties and any([l is None for l in slab.site_properties['layer']]):
+                index = slab.site_properties['layer'].index(None)
+                adatoms = True
+            else:
+                #import pdb; pdb.set_trace()
+                index = index_fn(slab.frac_coords[:, 2])
+                if adatoms and slab[index].species_string=='Mn':
+                    pass
 
-            if np.any(os_on_top):
-                index = np.where(os_on_top)[0][0]
 
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             removed_sites.append(slab.pop(index))
 
             # Check if the altered surface is symmetric
@@ -358,8 +369,11 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
     all_coords = []
     for site in removed_sites:
         inv_fcoords = inv_so.operate(site.frac_coords)
-        slab.append(site.specie, site.frac_coords, properties=site.properties)
-        slab.append(site.specie, inv_fcoords, properties=site.properties)
+        if not in_coord_list_pbc(slab.frac_coords, site.frac_coords):
+            slab.append(site.specie, site.frac_coords, properties=site.properties)
+        if not in_coord_list_pbc(slab.frac_coords, inv_fcoords):
+            slab.append(site.specie, inv_fcoords, properties=site.properties)
+
         all_coords.append(site.coords)
         all_coords.append(slab[-1].coords)
     all_coords = np.array(all_coords)
@@ -387,6 +401,8 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=3.
         sd = [[False]*3 if mn+sd_height <= proj <= mx-sd_height 
               else [True]*3 for proj in projs]
         slab.add_site_property("selective_dynamics", sd)
+    if not slab.is_symmetric():
+        pass
     assert slab.is_symmetric(), "resultant slab not symmetric"
     return slab
 
@@ -464,6 +480,8 @@ def add_bonded_O_to_surface(slab, r=2.5, mode='top', symmetrize=True):
                     if not in_coord_list_pbc(new_slab.frac_coords, pos):
                         new_slab.append('O', pos, properties={"layer":None})
                         #import pdb; pdb.set_trace()
+                        # Check to make sure there's not anything there.
+                        assert not new_slab.get_neighbors(new_slab[-1], r=0.01)
     return new_slab
 
 def test_bonded_O(slab, r=2.5, mode='top'):
@@ -501,7 +519,7 @@ def test_problem_110():
     mpid = 'mp-714882'
     struct = mpr.get_structure_by_material_id(mpid)
     conv = SpacegroupAnalyzer(struct).get_conventional_standard_structure()
-    conv = decorate_bulk_coord(conv)
+    #conv = decorate_bulk_coord(conv)
     slabs[mpid] = generate_all_slabs(conv, max_index=1, min_slab_size=12.0, 
                                      min_vacuum_size=18.0, label_layers=True)
     slab_110 = slabs[mpid][1]
@@ -509,6 +527,7 @@ def test_problem_110():
     #my_slab = add_bonded_O_to_surface(slab_110, mode='bottom', symmetrize=False)
     my_slab = symmetrize_slab_by_addition(my_slab)
     test_oxide_slabs(my_slab)
+    print "Test 110 passed"
 
 @explicit_serialize
 def PassEnergyStructureTask(FireTaskBase):
@@ -538,7 +557,8 @@ if __name__=="__main__":
     #new = clean_layer(slab)
     #new_2 = add_bonded_O_to_surface(slab)
     all_slabs = get_oxide_slabs(conv)#, add_adsorbates=True)
-    test_oxide_slabs(all_slabs[3])
+    test_oxide_slabs(all_slabs)
+    all_slabs = get_oxide_slabs(conv, add_adsorbates=True)
     """
     structure = mpr.get_structures("mp-5229")[0]
     wfs = pdb_function(get_wfs_oxide_from_bulk, structure, ads_structures_params={"repeat":[1, 1, 1]})
