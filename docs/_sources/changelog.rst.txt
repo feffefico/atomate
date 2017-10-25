@@ -2,6 +2,36 @@
 atomate Changelog
 =================
 
+**v0.6.3**
+
+* fix Gibbs wf db insertion (A. Dunn, K. Mathew)
+* minor doc updates & fixes (A. Jain)
+
+**v0.6.2**
+
+* Fix LepsFW after prev refactor (A. Jain)
+* Doc improvements (A. Jain, B. Bocklund)
+
+**v0.6.1**
+
+* many improvements to documentation (A. Jain, B. Bocklund)
+* add DFPTFW (K. Mathew)
+* simplify LepsFW - move Raman into RamanFW (K. Mathew)
+* copy piezo tensor to output (S. Dwaraknath)
+
+**v0.6.0**
+
+* Gibbs preset workflow and anharmonic contributions (B. Bocklund)
+* improvements to packmol workflow (K. Mathew)
+* modify_potcar powerup (J. Montoya)
+* more metadata in some analysis collections (B. Bocklund)
+* ability to specify common params in atwf (A. Jain)
+* allow powerups in atwf (J. Montoya)
+* many improvements to builders performance (A. Jain)
+* updates and fixes to installation tutorial (A. Jain, B. Bocklund)
+* unit testing updates (J. Montoya)
+* misc fixes ...
+
 **v0.5.8**
 
 * major improvements to LAMMPS workflow (B. Wood, K. Mathew)
