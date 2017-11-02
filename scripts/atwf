@@ -87,6 +87,12 @@ def _get_wf(args, structure):
 
 
 def add_wf(args):
+    """
+    Adds a workflow to the launchpad
+    """
+    if args.common_param_updates:
+        args.common_param_updates = ast.literal_eval(args.common_param_updates)  # str->dict
+
     for f in args.files:
         if not args.mp:
             s = Structure.from_file(f)
@@ -232,8 +238,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.common_param_updates:
-        args.common_param_updates = ast.literal_eval(args.common_param_updates)  # str->dict
 
     try:
         a = getattr(args, "func")
