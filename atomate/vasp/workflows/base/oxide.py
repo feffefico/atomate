@@ -12,6 +12,7 @@ from atomate.vasp.fireworks.core import OptimizeFW, TransmuterFW, StaticFW
 from atomate.vasp.powerups import add_tags
 from atomate.vasp.firetasks.parse_outputs import OERAnalysisTask
 from atomate.vasp.workflows.base.adsorption import get_slab_fw, SLAB_HANDLERS
+from atomate.vasp.powerups import modify_handlers, add_modify_incar
 
 from pymatgen.core.sites import PeriodicSite
 from pymatgen.core.operations import SymmOp
@@ -22,7 +23,7 @@ from pymatgen.transformations.standard_transformations import SupercellTransform
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.io.vasp.sets import MVLSlabSet, MPRelaxSet
 from pymatgen import Structure, Lattice, Molecule
-from pymatgen.util.coord import find_in_coord_list, in_coord_list_pbc
+from pymatgen.util.coord import find_in_coord_list, in_coord_list_pbc, find_in_coord_list_pbc
 
 __author__ = 'Joseph Montoya'
 __email__ = 'montoyjh@lbl.gov'
@@ -36,7 +37,7 @@ default_aip = {"ISIF": 0, "AMIX": 0.1, "AMIX_MAG": 0.4, "ENCUT":500,
                "BMIX": 0.0001, "ISYM":0, "BMIX_MAG": 0.0001, 
                "POTIM": 0.6, "EDIFFG": -0.05, "IBRION": 2, "EDIFF":1e-6}
 default_sip = default_aip
-default_slab_gen_params = {"max_index": 1, "min_slab_size": 10.0, "min_vacuum_size": 15.0,
+default_slab_gen_params = {"max_index": 1, "min_slab_size": 15.0, "min_vacuum_size": 15.0,
                            "center_slab": True}
 
 
@@ -160,7 +161,7 @@ def get_wfs_oxide_from_bulk(structure, gen_slab_params={}, vasp_input_set=None,
 
 
 def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
-                    add_hydroxylated=False):
+                    add_hydroxylated=False, sd_height=None, total_cutoff=None):
     """
     Quick function to get slabs for a given oxide
 
@@ -176,23 +177,29 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
 
     conv = SpacegroupAnalyzer(bulk_oxide).get_conventional_standard_structure()
     slabs = generate_all_slabs(conv, **gsp)
+    if total_cutoff:
+        slabs = sorted(slabs, key=lambda x: x.num_sites)[:total_cutoff]
     all_slabs = []
 
     for slab in slabs:
         # Add tasker corrected slab
         # import pdb; pdb.set_trace()
         if not slab.is_symmetric():
+            # Get tasker2 slabs
             tasker2_slabs = slab.get_tasker2_slabs()
-            if tasker2_slabs:
-                all_slabs += [tasker2_slabs]
-            else:
+            # Tasker2 correction barely works...
+            """
+            if not tasker2_slabs:
                 new_slab = slab.copy()
                 if slab.lattice.a > slab.lattice.b:
                     new_slab.make_supercell([1, 2, 1])
                 else:
                     new_slab.make_supercell([2, 1, 1])
                 tasker2_slabs = new_slab.get_tasker2_slabs()
-            if not all([s.is_symmetric() for s in tasker2_slabs]):
+                assert tasker2_slabs
+            """
+            # Ensure all tasker2 slabs are symmetric
+            if not all([s.is_symmetric() for s in tasker2_slabs]) or not tasker2_slabs:
                 tasker2_slabs = [symmetrize_slab_by_addition(
                                  slab, restoich=True, sd_height=None)]
             all_slabs += tasker2_slabs
@@ -219,6 +226,13 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
             c_coords = base.frac_coords[:, 2]
             indices = [np.argmin(c_coords), np.argmax(c_coords)]
             site = base[indices[1]]
+            if not site.species_string == 'O':
+                # Find site with highest that is O
+                # Maybe should reevaluate this at some point
+                o_frac_coords = np.array([s.frac_coords for s in base if s.species_string=='O'])
+                indices[1] = find_in_coord_list(base.frac_coords, 
+                                                o_frac_coords[np.argmax(o_frac_coords[:, 2])])
+                site = base[indices[1]]
             assert site.species_string == 'O'
             molecules = [Molecule("H", [[ -8.15221440e-01,   4.35023640e-01,   3.23265180e-01]]),
                          Molecule("OH", [[-1.16199703, -0.33129907, 0.78534692],
@@ -236,7 +250,11 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
                 ads_slab = symmetrize_slab_by_addition(ads_slab)
                 ads_slabs.append(ads_slab)
             # Add vacancy (bare slab case)
+            # Get inverse of index, lazy modifying of indices
             ads_slab = base.copy()
+            inv_so = get_inversion(ads_slab)
+            inverse = inv_so.operate(ads_slab[indices[1]].frac_coords) % 1
+            indices[0] = find_in_coord_list_pbc(ads_slab.frac_coords, inverse)
             ads_slab.remove_sites(indices)
             assert ads_slab.is_symmetric(), "vacancy slab is not symmetric"
             ads_slabs.append(ads_slab)
@@ -246,7 +264,19 @@ def get_oxide_slabs(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
             assert ads_slabs[1].num_sites == base.num_sites + 4
             assert ads_slabs[2].num_sites == base.num_sites - 2
 
+    if sd_height is not None:
+        all_slabs = [add_sd(s, sd_height=sd_height) for s in all_slabs]
     return all_slabs
+
+def get_inversion(slab):
+    symmops = SpacegroupAnalyzer(slab).get_symmetry_operations()
+    inv_symmops = [symmop for symmop in symmops
+                   if (symmop.rotation_matrix==-np.eye(3)).all()
+                   #and (symmop.translation_vector[:2]==0).all()
+                   ]
+    assert len(inv_symmops)>=1, "Less than one inv_symmop"
+    inv_so = inv_symmops[0]
+    return inv_so
 
 def get_minlw_slab(slab, min_lw):
     xrep = np.ceil(min_lw / np.linalg.norm(slab.lattice.matrix[0]))
@@ -255,9 +285,8 @@ def get_minlw_slab(slab, min_lw):
     rep_slab.make_supercell([xrep, yrep, 1])
     return rep_slab
 
-def get_oxide_wflow(bulk_oxide, gen_slab_params={}, add_adsorbates=False,
-                    add_hydroxylated=False):
-    slabs = get_oxide_slabs(bulk_oxide)
+def get_oxide_wflow(bulk_oxide, **kwargs):
+    slabs = get_oxide_slabs(bulk_oxide, **kwargs)
     formula = bulk_oxide.composition.reduced_formula
     slab_fws = []
     for slab in slabs:
@@ -342,7 +371,7 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=No
             else:
                 #import pdb; pdb.set_trace()
                 index = index_fn(slab.frac_coords[:, 2])
-                if adatoms and slab[index].species_string=='Mn':
+                if adatoms and slab[index].species_string not in ['O', 'H']:
                     pass
 
 
@@ -390,7 +419,8 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=No
         else:
             slab.make_supercell([2, 1, 1])
             #all_coords[0, :] /= 2
-        indices = [find_in_coord_list(slab.cart_coords, coord) for coord in all_coords]
+        all_frac_coords = [slab.lattice.get_fractional_coords(coord) % 1 for coord in all_coords]
+        indices = [find_in_coord_list(slab.frac_coords, coord) for coord in all_frac_coords]
         slab.remove_sites(indices=indices)
         assert slab_old.composition.reduced_formula == slab.composition.reduced_formula, "Restoich failed"
 
@@ -401,10 +431,18 @@ def symmetrize_slab_by_addition(slab, sga_params={}, recenter=True, sd_height=No
         sd = [[False]*3 if mn+sd_height <= proj <= mx-sd_height 
               else [True]*3 for proj in projs]
         slab.add_site_property("selective_dynamics", sd)
-    if not slab.is_symmetric():
-        pass
     assert slab.is_symmetric(), "resultant slab not symmetric"
     return slab
+
+def add_sd(slab, sd_height):
+    mvec = AdsorbateSiteFinder(slab).mvec
+    projs = [np.dot(coord, mvec) for coord in slab.cart_coords]
+    mx, mn = max(projs), min(projs)
+    sd = [[False]*3 if mn+sd_height <= proj <= mx-sd_height 
+          else [True]*3 for proj in projs]
+    slab.add_site_property("selective_dynamics", sd)
+    return slab
+
 
 def get_bulk_coord(structure, site, radius=2.5):
     neighbors = structure.get_neighbors(site, radius)
@@ -543,7 +581,6 @@ if __name__=="__main__":
     from pymatgen import MPRester
     from personal.functions import pdb_function
     from pymatgen.core.surface import SlabGenerator
-    from atomate.vasp.powerups import add_modify_incar
     mpr = MPRester()
     slabs = {}
     mpid = 'mp-714882'

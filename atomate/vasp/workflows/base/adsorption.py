@@ -31,7 +31,7 @@ __email__ = 'montoyjh@lbl.gov'
 
 # Slab handlers doesn't include positive energy and changes
 SLAB_HANDLERS = [VaspErrorHandler(), UnconvergedErrorHandler(), FrozenJobErrorHandler(),
-                 NonConvergingErrorHandler(change_algo=True, nionic_steps=3), StdErrHandler()]
+                 NonConvergingErrorHandler(change_algo=True, nionic_steps=5), StdErrHandler()]
 
 def get_slab_fw(slab, bulk_structure=None, slab_gen_params={}, db_file=None, vasp_input_set=None,
                 copy_vasp_outputs=False, vasp_cmd="vasp", name="", **kwargs):
