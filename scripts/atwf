@@ -11,12 +11,12 @@ import yaml
 import ast
 from datetime import datetime
 
-from monty.serialization import loadfn
+from monty.serialization import loadfn, dumpfn
 
 from fireworks import LaunchPad
 
 from atomate.utils.utils import get_wf_from_spec_dict, load_class
-from atomate.vasp.powerups import add_namefile, add_tags
+from atomate.vasp.powerups import add_namefile, add_tags, add_auto_continue
 from atomate.vasp.workflows.presets import core
 
 from pymatgen import Structure, Lattice, MPRester
@@ -163,6 +163,57 @@ def powerup_workflow(args):
     """
     Simple function that will powerup a workflow in the database
     """
+    wfs = get_wfs(args)
+    powerup_fn = load_class(args.module, args.name)
+    powerup_kwargs = ast.literal_eval(args.powerup_kwargs)
+    for wf in wfs:
+        wf = powerup_fn(wf, **powerup_kwargs)
+        for fw in wf.fws:
+            lpad.update_spec([fw.fw_id], {"_tasks": fw.as_dict()['spec']['_tasks']})
+
+
+def restart_workflow(args):
+    """
+    Simple function that will continue a vasp calculation
+    """
+    wfs = get_wfs(args)
+    # TODO: right now this is only used to add continue.json to runs
+    # that exist, but should be abstracted a bit more probably
+    for wf in wfs:
+        for fw in wf.fws:
+            if fw.state == "FIZZLED":
+                if not args.clear:
+                    restart_fw(lpad, fw.fw_id)
+                else:
+                    lpad.rerun_fws([fw.fw_id])
+        # Ensure autocontinue is on
+        # TODO: this is a bit dangerous because it does so on a wf level
+        wf = add_auto_continue(wf)
+        for fw in wf.fws:
+            lpad.update_spec([fw.fw_id], {"_tasks": fw.as_dict()['spec']['_tasks']})
+
+
+def restart_fw(lpad, fw_id):
+    # Ensure that continue.json exists
+    recovery = lpad.get_recovery(fw_id)
+    # Add auto-continue?
+    launch_id = recovery['_launch_id']
+    launch_dir = lpad.get_launch_by_id(launch_id).launch_dir
+    continue_file = os.path.join(launch_dir, "continue.json")
+    if not os.path.isfile(continue_file):
+        # This should probably be something the user can change
+        actions = [{"file": "CONTCAR", 
+                    "action": {"_file_copy": {"dest": "POSCAR"}}},
+                   {"dict": "INCAR",
+                    "action": {"_set": {"ISTART": 1}}}]
+        dumpfn({"actions": actions}, continue_file)
+    lpad.rerun_fw(fw_id, recover_launch=launch_id, recover_mode="copy")
+
+
+def get_wfs(args):
+    """
+    Function to get wfs based on query arguments
+    """
     if args.wf_id and args.query:
         raise ValueError("Only one of --wf_id and --query may be specified")
     elif args.wf_id:
@@ -172,19 +223,15 @@ def powerup_workflow(args):
         wf_ids = lpad.get_wf_ids(query)
         wfs = [lpad.get_wf_by_fw_id(wf_id) for wf_id in wf_ids]
     else:
-        raise ValueError("At least one of --wf_id or --query must be specified")
-    powerup_fn = load_class(args.module, args.name)
-    powerup_kwargs = ast.literal_eval(args.powerup_kwargs)
-    for wf in wfs:
-        wf = powerup_fn(wf, **powerup_kwargs)
-        for fw in wf.fws:
-            lpad.update_spec([fw.fw_id], {"_tasks": fw.as_dict()['spec']['_tasks']})
+        raise ValueError("At least one of --wf_id or --query must be specified") 
+    return wfs
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="atwf is a convenient script to add workflows using a "
-                    "simple YAML spec.",
+                    "simple YAML spec, modify workflows in place using "
+                    "powerups, or restart calculations",
         epilog="Author: Shyue Ping Ong")
 
     subparsers = parser.add_subparsers()
@@ -233,9 +280,17 @@ if __name__ == "__main__":
                           help="Module containing powerup")
     ppowerup.add_argument("-pk", "--powerup_kwargs", default='{}',
                           help="powerup keyword arguments, e.g. "
-                               "'{\"incar_update\": {\"ENCUT\": 700}}'")
+                          "'{\"modify_incar_params\": {\"incar_update\": {\"ENCUT\": 700}}}'")
+
     ppowerup.set_defaults(func=powerup_workflow)
 
+    prestart = subparsers.add_parser("restart", help="restart existing launches for reruns")
+    # TODO: there's some discrepancy between this and the prior one
+    # because of FW vs. WF queries, resolve this
+    prestart.add_argument("-i", "--wf_id", help="FW id to restart")
+    prestart.add_argument("-q", "--query", help="Query for workflows")
+    prestart.add_argument("--clear", action="store_true", help="Whether to clear the recovery")
+    prestart.set_defaults(func=restart_workflow)
     args = parser.parse_args()
 
 
