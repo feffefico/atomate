@@ -20,7 +20,7 @@ from fireworks.utilities.dict_mods import apply_mod
 from pymatgen.core.structure import Structure
 from pymatgen.alchemy.materials import TransformedStructure
 from pymatgen.alchemy.transmuters import StandardTransmuter
-from pymatgen.io.vasp import Incar, Poscar, Potcar, PotcarSingle
+from pymatgen.io.vasp import Incar, Poscar, Potcar, PotcarSingle, Chgcar
 from pymatgen.io.vasp.sets import MPStaticSet, MPNonSCFSet, MPSOCSet, MPHSEBSSet
 
 from atomate.utils.utils import env_chk, load_class
@@ -33,19 +33,19 @@ __email__ = 'ajain@lbl.gov'
 @explicit_serialize
 class WriteVaspFromIOSet(FiretaskBase):
     """
-    Create VASP input files using implementations of pymatgen's AbstractVaspInputSet. An input set 
+    Create VASP input files using implementations of pymatgen's AbstractVaspInputSet. An input set
     can be provided as an object or as a String/parameter combo.
 
     Required params:
         structure (Structure): structure
-        vasp_input_set (AbstractVaspInputSet or str): Either a VaspInputSet object or a string 
+        vasp_input_set (AbstractVaspInputSet or str): Either a VaspInputSet object or a string
             name for the VASP input set (e.g., "MPRelaxSet").
 
     Optional params:
-        vasp_input_params (dict): When using a string name for VASP input set, use this as a dict 
-            to specify kwargs for instantiating the input set parameters. For example, if you want 
-            to change the user_incar_settings, you should provide: {"user_incar_settings": ...}. 
-            This setting is ignored if you provide the full object representation of a VaspInputSet 
+        vasp_input_params (dict): When using a string name for VASP input set, use this as a dict
+            to specify kwargs for instantiating the input set parameters. For example, if you want
+            to change the user_incar_settings, you should provide: {"user_incar_settings": ...}.
+            This setting is ignored if you provide the full object representation of a VaspInputSet
             rather than a String.
     """
 
@@ -210,8 +210,8 @@ class ModifyPotcar(FiretaskBase):
 @explicit_serialize
 class WriteVaspStaticFromPrev(FiretaskBase):
     """
-    Writes input files for a static run. Assumes that output files from a previous 
-    (e.g., optimization) run can be accessed in current dir or prev_calc_dir. Also allows 
+    Writes input files for a static run. Assumes that output files from a previous
+    (e.g., optimization) run can be accessed in current dir or prev_calc_dir. Also allows
     lepsilon (dielectric constant) calcs.
 
     Required params:
@@ -359,8 +359,8 @@ class WriteVaspSOCFromPrev(FiretaskBase):
 class WriteTransmutedStructureIOSet(FiretaskBase):
     """
     Apply the provided transformations to the input structure and write the
-    input set for that structure. Reads structure from POSCAR if no structure provided. Note that 
-    if a transformation yields many structures from one, only the last structure in the list is 
+    input set for that structure. Reads structure from POSCAR if no structure provided. Note that
+    if a transformation yields many structures from one, only the last structure in the list is
     used.
 
     Required params:
@@ -377,7 +377,8 @@ class WriteTransmutedStructureIOSet(FiretaskBase):
     """
 
     required_params = ["structure", "transformations", "vasp_input_set"]
-    optional_params = ["prev_calc_dir", "transformation_params", "override_default_vasp_params"]
+    optional_params = ["prev_calc_dir", "transformation_params",
+                       "override_default_vasp_params", "rewrite_chgcar"]
 
     def run_task(self, fw_spec):
 
@@ -412,6 +413,10 @@ class WriteTransmutedStructureIOSet(FiretaskBase):
         vis_dict.update(self.get("override_default_vasp_params", {}) or {})
         vis = vis_orig.__class__.from_dict(vis_dict)
         vis.write_input(".")
+        if self.get("rewrite_chgcar", False):
+            chgcar = Chgcar.from_file('CHGCAR')
+            chgcar.structure = final_structure
+            chgcar.write_file('CHGCAR')
 
         dumpfn(transmuter.transformed_structures[-1], "transformations.json")
 

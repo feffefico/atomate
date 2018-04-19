@@ -28,9 +28,8 @@ logger = get_logger(__name__)
 
 
 def get_wf_elastic_constant(structure, strain_states=None, stencils=None,
-                            db_file=None,
-                            conventional=False, order=2, vasp_input_set=None,
-                            analysis=True,
+                            db_file=None, conventional=False, order=2,
+                            vasp_input_set=None, analysis=True,
                             sym_reduce=False, tag='elastic',
                             copy_vasp_outputs=False, **kwargs):
     """

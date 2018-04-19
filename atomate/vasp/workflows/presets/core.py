@@ -234,10 +234,17 @@ def wf_elastic_constant(structure, c=None, order=2, sym_reduce=False):
                              user_kpoints_settings=kpts_settings,
                              user_incar_settings=uis_static)
 
+    # Append the static workflow
+    static_wf = get_wf(structure, "static_only.yaml", vis=vis_static,
+                       params=[{"vasp_cmd": vasp_cmd,  "db_file": db_file,
+                                "name": "elastic structure static calc"}])
+    wf.append_wf(static_wf, wf.leaf_fw_ids)
+
     # deformations wflow for elasticity calculation
     wf_elastic = get_wf_elastic_constant(structure, vasp_cmd=vasp_cmd, db_file=db_file,
                                          order=order, stencils=stencils, copy_vasp_outputs=True,
                                          vasp_input_set=vis_static, sym_reduce=sym_reduce)
+
     wf.append_wf(wf_elastic, wf.leaf_fw_ids)
 
     wf = add_common_powerups(wf, c)
