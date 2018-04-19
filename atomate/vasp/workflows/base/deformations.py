@@ -21,7 +21,8 @@ logger = get_logger(__name__)
 
 
 def get_wf_deformations(structure, deformations, name="deformation", vasp_input_set=None,
-                        vasp_cmd="vasp", db_file=None, tag="", copy_vasp_outputs=True, metadata=None):
+                        vasp_cmd="vasp", db_file=None, tag="", copy_vasp_outputs=True,
+                        rewrite_chgcar=False, metadata=None):
     """
     Returns a structure deformation workflow.
 
@@ -56,7 +57,8 @@ def get_wf_deformations(structure, deformations, name="deformation", vasp_input_
                           transformations=['DeformStructureTransformation'],
                           transformation_params=[{"deformation": deformation.tolist()}],
                           vasp_input_set=vasp_input_set, copy_vasp_outputs=copy_vasp_outputs,
-                          parents=parents, vasp_cmd=vasp_cmd, db_file=db_file)
+                          parents=parents, vasp_cmd=vasp_cmd, db_file=db_file,
+                          rewrite_chgcar=rewrite_chgcar)
         fws.append(fw)
 
     wfname = "{}:{}".format(structure.composition.reduced_formula, name)

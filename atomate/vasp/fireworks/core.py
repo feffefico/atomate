@@ -49,8 +49,8 @@ class OptimizeFW(Firework):
             structure (Structure): Input structure.
             name (str): Name for the Firework.
             vasp_input_set (VaspInputSet): input set to use. Defaults to MPRelaxSet() if None.
-            override_default_vasp_params (dict): If this is not None, these params are passed to 
-                the default vasp_input_set, i.e., MPRelaxSet. This allows one to easily override 
+            override_default_vasp_params (dict): If this is not None, these params are passed to
+                the default vasp_input_set, i.e., MPRelaxSet. This allows one to easily override
                 some settings, e.g., user_incar_settings, etc.
             vasp_cmd (str): Command to run vasp.
             ediffg (float): Shortcut to set ediffg in certain jobs
@@ -93,15 +93,15 @@ class StaticFW(Firework):
         Standard static calculation Firework - either from a previous location or from a structure.
 
         Args:
-            structure (Structure): Input structure. Note that for prev_calc_loc jobs, the structure 
-                is only used to set the name of the FW and any structure with the same composition 
+            structure (Structure): Input structure. Note that for prev_calc_loc jobs, the structure
+                is only used to set the name of the FW and any structure with the same composition
                 can be used.
             name (str): Name for the Firework.
             vasp_input_set (VaspInputSet): input set to use (for jobs w/no parents)
                 Defaults to MPStaticSet() if None.
             vasp_input_set_params (dict): Dict of vasp_input_set kwargs.
             vasp_cmd (str): Command to run vasp.
-            prev_calc_loc (bool or str): If true (default), copies outputs from previous calc. If 
+            prev_calc_loc (bool or str): If true (default), copies outputs from previous calc. If
                 a str value, retrieves a previous calculation output by name. If False/None, will create
                 new static calculation using the provided structure.
             prev_calc_dir (str): Path to a previous calculation to copy from
@@ -488,7 +488,7 @@ class SOCFW(Firework):
         Firework for spin orbit coupling calculation.
 
         Args:
-            structure (Structure): Input structure. If copy_vasp_outputs, used only to set the 
+            structure (Structure): Input structure. If copy_vasp_outputs, used only to set the
                 name of the FW.
             name (str): Name for the Firework.
             prev_calc_dir (str): Path to a previous calculation to copy from
@@ -531,11 +531,11 @@ class TransmuterFW(Firework):
     def __init__(self, structure, transformations, transformation_params=None,
                  vasp_input_set=None, prev_calc_dir=None,
                  name="structure transmuter", vasp_cmd="vasp",
-                 copy_vasp_outputs=True, db_file=None,
+                 copy_vasp_outputs=True, db_file=None, rewrite_chgcar=False,
                  parents=None, override_default_vasp_params=None, **kwargs):
         """
         Apply the transformations to the input structure, write the input set corresponding
-        to the transformed structure, and run vasp on them.  Note that if a transformation yields 
+        to the transformed structure, and run vasp on them.  Note that if a transformation yields
         many structures from one, only the last structure in the list is used.
 
         Args:
@@ -543,7 +543,7 @@ class TransmuterFW(Firework):
             transformations (list): list of names of transformation classes as defined in
                 the modules in pymatgen.transformations.
                 eg:  transformations=['DeformStructureTransformation', 'SupercellTransformation']
-            transformation_params (list): list of dicts where each dict specify the input 
+            transformation_params (list): list of dicts where each dict specify the input
                 parameters to instantiate the transformation class in the transformations list.
             vasp_input_set (VaspInputSet): VASP input set, used to write the input set for the
                 transmuted structure.
@@ -571,7 +571,8 @@ class TransmuterFW(Firework):
                                               transformation_params=transformation_params,
                                               vasp_input_set=vasp_input_set,
                                               override_default_vasp_params=override_default_vasp_params,
-                                              prev_calc_dir="."))
+                                              prev_calc_dir=".",
+                                              rewrite_chgcar=rewrite_chgcar))
         elif copy_vasp_outputs:
             t.append(CopyVaspOutputs(calc_loc=True, contcar_to_poscar=True))
             t.append(
@@ -580,7 +581,8 @@ class TransmuterFW(Firework):
                                               transformation_params=transformation_params,
                                               vasp_input_set=vasp_input_set,
                                               override_default_vasp_params=override_default_vasp_params,
-                                              prev_calc_dir="."))
+                                              prev_calc_dir=".",
+                                              rewrite_chgcar=rewrite_chgcar))
         elif structure:
             t.append(WriteTransmutedStructureIOSet(structure=structure,
                                                    transformations=transformations,
@@ -668,7 +670,7 @@ class BoltztrapFW(Firework):
                  scissor=0.0, doping=None, tmax=1300, tgrid=50, prev_calc_dir=None,
                  soc=False, additional_fields=None, **kwargs):
         """
-        Run Boltztrap (which includes writing bolztrap input files and parsing outputs). Assumes 
+        Run Boltztrap (which includes writing bolztrap input files and parsing outputs). Assumes
         you have a previous FW with the calc_locs passed into the current FW.
 
         Args:
